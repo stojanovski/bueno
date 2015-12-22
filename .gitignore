@@ -6,4 +6,6 @@
 *.vcproj.*
 src/**/Debug/
 src/**/Release/
+debug/
+release/
 
