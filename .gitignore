@@ -1,0 +1,9 @@
+
+# MSVC
+*.suo
+*.ncb
+*.vcxproj.*
+*.vcproj.*
+src/**/Debug/
+src/**/Release/
+
