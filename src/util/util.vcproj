@@ -154,6 +154,10 @@
 				RelativePath=".\str.c"
 				>
 			</File>
+			<File
+				RelativePath=".\tree.c"
+				>
+			</File>
 		</Filter>
 		<Filter
 			Name="Header Files"

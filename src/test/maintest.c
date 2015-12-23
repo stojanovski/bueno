@@ -16,6 +16,7 @@
 
 #include "../util/str.h"
 #include "../util/io.h"
+#include "../util/tree.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -292,6 +293,11 @@ static int test_line_reader(int argc, char **argv)
     return 0;
 }
 
+static int test_bintree(int argc, char **argv)
+{
+    return 0;
+}
+
 static struct {
     const char *opt_name;
     int (* func)(int , char **);
@@ -299,6 +305,7 @@ static struct {
     const char *args_description;
 } argopts[] = {
     {"test_line_reader", test_line_reader, 0, ""},
+    {"test_bintree", test_bintree, 0, ""},
 };
 static const unsigned argopts_size = sizeof(argopts) / sizeof(argopts[0]);
 
