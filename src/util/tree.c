@@ -149,3 +149,83 @@ start:
 void bintree_balance(bintree_root_t *root, bintree_node_t *node)
 {
 }
+
+static void swap_node_pointers(bintree_node_t **first,
+                               bintree_node_t **second)
+{
+    bintree_node_t *tmp_node = *first;
+    *first = *second;
+    *second = tmp_node;
+}
+
+/* set parent child link to newnode */
+static void update_parents(bintree_node_t *orig_parent,
+                           const bintree_node_t * const orig,
+                           bintree_node_t * const newnode)
+{
+    if (orig_parent != NULL) {
+        if (orig == orig_parent->left)
+            orig_parent->left = newnode;
+        else {
+            assert(orig == orig_parent->right);
+            orig_parent->right = newnode;
+        }
+    }
+}
+
+/* swap two nodes' parent child link */
+static void swap_parent_child_pointers(bintree_node_t *first,
+                                       bintree_node_t *second)
+{
+    bintree_node_t *first_parent = first->parent;
+    bintree_node_t *second_parent = second->parent;
+    update_parents(first_parent, first, second);
+    update_parents(second_parent, second, first);
+}
+
+/* swap two nodes' positions wihtin a tree */
+static void swap_nodes(bintree_node_t *first, bintree_node_t *second)
+{
+    unsigned char tmp_color;
+    assert(first != NULL);
+    assert(second != NULL);
+    assert(first != second);
+
+    swap_parent_child_pointers(first, second);
+
+    swap_node_pointers(&first->parent, &second->parent);
+    swap_node_pointers(&first->left, &second->left);
+    swap_node_pointers(&first->right, &second->right);
+
+    tmp_color = first->color;
+    first->color = second->color;
+    second->color = first->color;
+}
+
+/* find the successor value node, then swap these two nodes */
+static void swap_with_successor(bintree_node_t *node)
+{
+    bintree_node_t *right_min;
+    assert(node != NULL);
+    assert(node->right != NULL);
+
+    /* find the successor node */
+    right_min = node->right;
+    while (right_min->left != NULL)
+        right_min = right_min->left;
+
+    swap_nodes(node, right_min);
+}
+
+
+static void remove_node(bintree_node_t *node)
+{
+    /* if the node to remove has two children, reduce this first to a problem
+     * of removing a one or a zero child node: replace such node with the
+     * successor value node, which is guaranteed to be not have two children */
+    if (node->left != NULL && node->right != NULL)
+        swap_with_successor(node);
+
+    /* at this point, must only have zero or one child */
+    assert(!(node->left != NULL && node->right != NULL));
+}
