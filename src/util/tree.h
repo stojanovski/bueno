@@ -28,9 +28,16 @@ typedef struct _bintree_node_t
 typedef struct _bintree_root_t
 {
     bintree_node_t *node;
+    size_t size;
 } bintree_root_t;
 
 void bintree_init(bintree_root_t *root);
-void bintree_balance(bintree_root_t *root, bintree_node_t *node);
+void bintree_insert(bintree_root_t *root,
+                    bintree_node_t *succ,
+                    bintree_node_t *node);
+void bintree_remove(bintree_root_t *root,
+                    bintree_node_t *node);
+size_t bintree_size(bintree_root_t *root);
+int bintree_validate(bintree_root_t *root);
 
 #endif  /* _TREE_H_ */

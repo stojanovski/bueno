@@ -21,7 +21,13 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+#include <time.h>
+
+#ifdef WIN32
 #include <windows.h>
+
+typedef SSIZE_T ssize_t;
+#endif
 
 static int test_line_reader_old(int argc, char **argv)
 {
@@ -293,10 +299,54 @@ static int test_line_reader(int argc, char **argv)
     return 0;
 }
 
+/* TEST bintree */
+
+typedef struct _ssize_t_bintree_node_t {
+    bintree_node_t node;
+    ssize_t value;
+} ssize_t_bintree_node_t;
+
+#define GETRAND() ((size_t)rand() % 1000)
+
+static void insert_node(bintree_root_t *t,
+                        ssize_t_bintree_node_t *node)
+{
+    bintree_node_t *succ = t->node;
+    if (succ != NULL) {
+
+        /* TODO */
+    }
+    bintree_insert(t, succ, &node->node);
+}
+
+static void insert_values(bintree_root_t *t, size_t n)
+{
+    size_t i;
+    ASSERT_EXP(bintree_validate(t) == 0);
+    for (i = 0; i < n; ++i) {
+        ssize_t_bintree_node_t *node = (ssize_t_bintree_node_t *)
+            malloc(sizeof(ssize_t_bintree_node_t));
+        node->value = GETRAND();
+        insert_node(t, node);
+        ASSERT_EXP(bintree_validate(t) == 0);
+    }
+}
+
 static int test_bintree(int argc, char **argv)
 {
+    bintree_root_t t;
+
+    srand((unsigned)time(NULL));
+
+    bintree_init(&t);
+    ASSERT_EXP(bintree_validate(&t) == 0);
+
+    insert_values(&t, 1);
+
     return 0;
 }
+
+/****************************************************************************/
 
 static struct {
     const char *opt_name;

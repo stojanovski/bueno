@@ -24,6 +24,7 @@
 void bintree_init(bintree_root_t *root)
 {
     root->node = NULL;
+    root->size = 0;
 }
 
 static bintree_node_t *grandparent(bintree_node_t *node)
@@ -146,8 +147,75 @@ start:
         rotate_left(grandparent);
 }
 
-void bintree_balance(bintree_root_t *root, bintree_node_t *node)
+static void update_root_if_needed(bintree_root_t *root)
 {
+    /* if nodes rotate, the root may have shifted: reflect any changes */
+    if (root->node != NULL) {
+        while (root->node->parent != NULL)
+            root->node = root->node->parent;
+    }
+}
+
+void bintree_insert(bintree_root_t *root,
+                    bintree_node_t *succ,
+                    bintree_node_t *node)
+{
+    assert(root != NULL);
+
+    /* this node will be added as a leaf initially */
+    node->left = node->right = NULL;
+
+    if (succ == NULL) {
+        /* asked to insert node as largest tree element or the tree is empty */
+
+        bintree_node_t *cur;
+
+        if (root->node == NULL) {
+            /* the tree is empty: insert node as black */
+            assert(root->size == 0);
+            node->parent = NULL;
+            node->color = BLACK;
+            root->node = node;
+            root->size = 1;
+            return;
+        }
+        else {
+            /* insert as largest value node, mark as red before rebalancing */
+
+            /* find the current max value node */
+            cur = root->node;
+            while (cur->right != NULL)
+                cur = cur->right;
+
+            cur->right = node;
+            node->parent = cur;
+        }
+    }
+    else {
+        /* asked to insert right before a successor node */
+
+        /* find succ's predecessor node; make node a right child of it */
+        bintree_node_t *pred = succ->left;
+        if (pred != NULL) {
+            while (pred->right != NULL)
+                pred = pred->right;
+            pred->right = node;
+            node->parent = pred;
+        }
+        else {
+            /* succ is the smallest value node in the tree: just attach
+             * node to it */
+            succ->left = node;
+            node->parent = succ;
+        }
+    }
+
+    /* always set node as red leaf before rebalancing */
+    node->color = RED;
+
+    rebalance_after_insert(node);
+    update_root_if_needed(root);
+    ++root->size;
 }
 
 static void swap_node_pointers(bintree_node_t **first,
@@ -294,7 +362,7 @@ static bintree_node_t *sibling(bintree_node_t *node, int *sibling_on_right)
 }
 
 /* algorithm based on https://en.wikipedia.org/wiki/Red%E2%80%93black_tree */
-static void remove_black_leaf(bintree_node_t *node)
+static void rebalance_black_leaf_removal(bintree_node_t *node)
 {
     bintree_node_t *sib;
     int sib_on_right;
@@ -394,16 +462,17 @@ start_over:
     }
 }
 
-static void remove_node(bintree_node_t *node)
+void bintree_remove(bintree_root_t *root, bintree_node_t *node)
 {
     assert(node != NULL);
+    assert(root->size > 0);
 
     /* if node is a red leaf, simply remove node as this won't violate any RB
      * tree rules */
     if (node->color == RED && has_no_children(node)) {
         assert(node->parent != NULL);  /* red node can't be a root */
         detach_node(node);
-        return;
+        goto done;
     }
 
     /* if node is a single-child parent, it must be black; replace with its
@@ -415,7 +484,7 @@ remove_one_child_node:
         assert(child->color == RED);
         replace_node(child, node);
         child->color = BLACK;
-        return;
+        goto done;
     }
 
     if (has_both_children(node)) {
@@ -433,7 +502,7 @@ remove_one_child_node:
             /* simply remove this red leaf node, which shouldn't violate any
              * RB tree rules */
             detach_node(node);
-            return;
+            goto done;
         }
         else if (has_one_child(node))
             goto remove_one_child_node;
@@ -442,6 +511,86 @@ remove_one_child_node:
     /* the node is now a black leaf */
     assert(has_no_children(node));
     assert(node->color == BLACK);
-    remove_black_leaf(node);
+    rebalance_black_leaf_removal(node);
     detach_node(node);
+
+done:
+    if (node->parent == NULL && has_no_children(node)) {
+        /* just excised the last node from the tree: reset root */
+        assert(root->size == 1);
+        root->node = NULL;
+    } else
+        update_root_if_needed(root);
+
+    --root->size;
+}
+
+size_t bintree_size(bintree_root_t *root)
+{
+    return root->size;
+}
+
+struct bintree_tracker_t
+{
+    int max_black_depth_is_set;
+    size_t max_black_depth;
+    size_t black_depth;
+    size_t tree_size;
+};
+
+static int bintree_validate_traverse(bintree_node_t *node,
+                                     struct bintree_tracker_t *tr)
+{
+    int ret;
+    assert(node != NULL);
+
+    ++tr->tree_size;
+    if (node->color == BLACK)
+        ++tr->black_depth;
+
+    if (has_no_children(node)) {
+        if (tr->max_black_depth_is_set) {
+            if (tr->black_depth != tr->max_black_depth)
+                return -1;
+        }
+        else {
+            tr->max_black_depth_is_set = 1;
+            tr->max_black_depth = tr->black_depth;
+        }
+
+        return 0;
+    }
+
+    ret = bintree_validate_traverse(node->left, tr);
+    if (ret == 0)
+        ret = bintree_validate_traverse(node->right, tr);
+    return ret;
+}
+
+int bintree_validate(bintree_root_t *root)
+{
+    int ret;
+    struct bintree_tracker_t tr;
+    tr.max_black_depth_is_set = 0;
+    tr.max_black_depth = 0;
+    tr.black_depth = 0;
+    tr.tree_size = 0;
+
+    if (root->node == NULL) {
+        /* empty tree is valid */
+        return root->size == 0 ? 0 : -2;
+    }
+    else if (has_no_children(root->node)) {
+        /* when tree has one node, it must be black */
+        if (root->node->color == BLACK)
+            return root->size == 1 ? 0 : -2;
+        else
+            return -1;
+    }
+
+    ret = bintree_validate_traverse(root->node, &tr);
+    if (ret == 0)
+        return root->size == tr.tree_size ? 0 : -2;
+
+    return ret;
 }
