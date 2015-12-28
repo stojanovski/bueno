@@ -564,6 +564,10 @@ static int bintree_validate_traverse(bintree_node_t *node,
     ret = bintree_validate_traverse(node->left, tr);
     if (ret == 0)
         ret = bintree_validate_traverse(node->right, tr);
+
+    If (node->color == BLACK)
+        --tr->black_depth;
+
     return ret;
 }
 
