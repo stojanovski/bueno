@@ -159,10 +159,10 @@ static void swap_node_pointers(bintree_node_t **first,
 }
 
 /* set parent child link to newnode */
-static void update_parents(bintree_node_t *orig_parent,
-                           const bintree_node_t * const orig,
+static void update_parents(const bintree_node_t * const orig,
                            bintree_node_t * const newnode)
 {
+    bintree_node_t *orig_parent = orig->parent;
     if (orig_parent != NULL) {
         if (orig == orig_parent->left)
             orig_parent->left = newnode;
@@ -177,10 +177,8 @@ static void update_parents(bintree_node_t *orig_parent,
 static void swap_parent_child_pointers(bintree_node_t *first,
                                        bintree_node_t *second)
 {
-    bintree_node_t *first_parent = first->parent;
-    bintree_node_t *second_parent = second->parent;
-    update_parents(first_parent, first, second);
-    update_parents(second_parent, second, first);
+    update_parents(first, second);
+    update_parents(second, first);
 }
 
 /* swap two nodes' positions wihtin a tree */
@@ -199,14 +197,13 @@ static void swap_nodes(bintree_node_t *first, bintree_node_t *second)
 
     tmp_color = first->color;
     first->color = second->color;
-    second->color = first->color;
+    second->color = tmp_color;
 }
 
 /* find the successor value node, then swap these two nodes */
 static void swap_with_successor(bintree_node_t *node)
 {
     bintree_node_t *right_min;
-    assert(node != NULL);
     assert(node->right != NULL);
 
     /* find the successor node */
@@ -217,15 +214,234 @@ static void swap_with_successor(bintree_node_t *node)
     swap_nodes(node, right_min);
 }
 
+static void detach_node(bintree_node_t *node)
+{
+    bintree_node_t *parent = node->parent;
+    if (parent != NULL) {
+        if (node == parent->left)
+            parent->left = NULL;
+        else {
+            assert(node == parent->right);
+            parent->right = NULL;
+        }
+    }
+}
+
+/* place dst in place of src in the tree; src is detached from the tree and
+ * should be freed; src *must* be dst's parent! */
+static void replace_node(bintree_node_t *dst, bintree_node_t *src)
+{
+    bintree_node_t *src_parent = src->parent;
+    assert(src->left == NULL && src->right == NULL);
+    assert(src == dst->parent);  /* src *must* be dst's parent! */
+
+    /* update parent's left/right to the destination node */
+    if (src_parent != NULL) {
+        if (src_parent->left == src)
+            src_parent->left = dst;
+        else {
+            assert(src_parent->right == src);
+            src_parent->right = dst;
+        }
+    }
+
+    /* fit dst node into src's tree location */
+    dst->parent = src_parent;
+    dst->left = src->left;
+    dst->right = src->right;
+}
+
+static int has_no_children(const bintree_node_t *node)
+{
+    return node->left == NULL && node->right == NULL;
+}
+
+static int has_one_child(const bintree_node_t *node)
+{
+    return (node->left != NULL) ? (node->right == NULL) :
+                                  (node->right != NULL);
+}
+
+static int has_both_children(const bintree_node_t *node)
+{
+    return node->left != NULL && node->right != NULL;
+}
+
+static bintree_node_t *get_the_one_child(bintree_node_t *node)
+{
+    assert(has_one_child(node));
+    return node->left != NULL ? node->left : node->right;
+}
+
+/* sibling_on_right is set to true if the sibling is to the right of the node's
+ * parent, false if it is to the left; sibling_on_right is not set if there is
+ * no sibling */
+static bintree_node_t *sibling(bintree_node_t *node, int *sibling_on_right)
+{
+    bintree_node_t *parent = node->parent;
+    if (parent) {
+        if (parent->left == node) {
+            *sibling_on_right = 1;
+            return parent->right;
+        }
+        else {
+            assert(parent->right == node);
+            *sibling_on_right = 0;
+            return parent->left;
+        }
+    }
+    return NULL;
+}
+
+/* algorithm based on https://en.wikipedia.org/wiki/Red%E2%80%93black_tree */
+static void remove_black_leaf(bintree_node_t *node)
+{
+    bintree_node_t *sib;
+    int sib_on_right;
+start_over:
+    /* if tree has a single node, then simply remove it ("Case 1") */
+    if (node->parent == NULL)
+        return;
+
+    /* sibling is red: reverse the colors of the parent and the sibling;
+     * sibling to the right (left) of the parent should be rotated
+     * left (right), such that the sibling becomes the grandparent of the
+     * node ("Case 2") */
+    sib = sibling(node, &sib_on_right);
+    if (sib != NULL && sib->color == RED) {
+        assert(node->parent->color == BLACK);
+        node->parent->color = RED;
+        sib->color = BLACK;
+        if (sib_on_right)
+            rotate_left(node->parent);
+        else
+            rotate_right(node->parent);
+    }
+
+    /* if the parent, the sibling and the sibling's children are black,
+     * repaint sibling to red and start over from above using the parent
+     * as the new node ("Case 3") */
+    sib = sibling(node, &sib_on_right);
+    assert(node->parent != NULL);
+    if (sib != NULL &&
+        sib->color == BLACK &&
+        node->parent->color == BLACK &&
+        sib->left != NULL && sib->left->color == BLACK &&
+        sib->right != NULL && sib->right->color == BLACK)
+    {
+        sib->color = RED;
+        node = node->parent;
+        goto start_over;
+    }
+
+    /* if the sibling and its children are black but the parent is red,
+     * exchange the colors of the sibling and the parent ("Case 4") */
+    sib = sibling(node, &sib_on_right);
+    if (sib != NULL &&
+        sib->color == BLACK &&
+        node->parent->color == RED &&
+        sib->left != NULL && sib->left->color == BLACK &&
+        sib->right != NULL && sib->right->color == BLACK)
+    {
+        sib->color = RED;
+        node->parent->color = BLACK;
+        return;
+    }
+
+    /* if sibling is black, its left (right) child is red, its right (left)
+     * child is black, and sibling is right (left) child of its parent, rotate
+     * right (left) at sibling; exchange colors of the sibling and its new
+     * parent ("Case 5") */
+    if (sib != NULL &&
+        sib->color == BLACK)
+    {
+        if (sib_on_right &&
+            sib->left != NULL && sib->left->color == RED &&
+            sib->right != NULL && sib->right->color == BLACK)
+        {
+            sib->color = RED;
+            sib->left->color = BLACK;
+            rotate_right(sib);
+        }
+        else if (!sib_on_right &&
+            sib->left != NULL && sib->left->color == BLACK &&
+            sib->right != NULL && sib->right->color == RED)
+        {
+            sib->color = RED;
+            sib->right->color = BLACK;
+            rotate_left(sib);
+        }
+    }
+
+    /* sibling is right (left) child of its parent and is black, its
+     * right (left) child is red; we rotate left (right) at parent; exchange
+     * colors of parent and sibling and make sibling's right (left) child
+     * black ("Case 6") */
+    sib = sibling(node, &sib_on_right);
+    if (sib != NULL &&
+        sib->color == BLACK)
+    {
+        sib->color = sib->parent->color;
+        sib->parent->color = BLACK;
+        if (sib_on_right) {
+            sib->right->color = BLACK;
+            rotate_left(node->parent);
+        }
+        else {
+            sib->left->color = BLACK;
+            rotate_right(node->parent);
+        }
+    }
+}
 
 static void remove_node(bintree_node_t *node)
 {
-    /* if the node to remove has two children, reduce this first to a problem
-     * of removing a one or a zero child node: replace such node with the
-     * successor value node, which is guaranteed to be not have two children */
-    if (node->left != NULL && node->right != NULL)
-        swap_with_successor(node);
+    assert(node != NULL);
 
-    /* at this point, must only have zero or one child */
-    assert(!(node->left != NULL && node->right != NULL));
+    /* if node is a red leaf, simply remove node as this won't violate any RB
+     * tree rules */
+    if (node->color == RED && has_no_children(node)) {
+        assert(node->parent != NULL);  /* red node can't be a root */
+        detach_node(node);
+        return;
+    }
+
+    /* if node is a single-child parent, it must be black; replace with its
+     * child, which must be red, and recolor that child black */
+remove_one_child_node:
+    if (has_one_child(node)) {
+        bintree_node_t *child = get_the_one_child(node);
+        assert(node->color == BLACK);
+        assert(child->color == RED);
+        replace_node(child, node);
+        child->color = BLACK;
+        return;
+    }
+
+    if (has_both_children(node)) {
+        /* if the node to remove has two children, reduce this first to a
+         * problem of removing a one or a zero child node: replace such node
+         * with the successor value node, which is guaranteed to not have
+         * two children */
+        swap_with_successor(node);
+        /* at this point, node is at former successor place in the tree,
+         * including having the former successor color */
+
+        if (node->color == RED) {
+            assert(has_no_children(node));  /* must not have children */
+
+            /* simply remove this red leaf node, which shouldn't violate any
+             * RB tree rules */
+            detach_node(node);
+            return;
+        }
+        else if (has_one_child(node))
+            goto remove_one_child_node;
+    }
+
+    /* the node is now a black leaf */
+    assert(has_no_children(node));
+    assert(node->color == BLACK);
+    remove_black_leaf(node);
+    detach_node(node);
 }
