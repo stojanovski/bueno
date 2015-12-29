@@ -306,42 +306,81 @@ typedef struct _ssize_t_bintree_node_t {
     ssize_t value;
 } ssize_t_bintree_node_t;
 
-#define GETRAND() ((size_t)rand() % 1000)
+static size_t get_rand(size_t range)
+{
+    return (size_t)rand() % range;
+}
+
+/* inspired by linux kernel's container_of() macro */
+#define get_container(type, member, ptr) \
+    ((type *)(((char *)ptr) - ((char *)&(((type *)0)->member))))
+
+static int ssize_t_less_then_comparator(const bintree_node_t *left,
+                                        const bintree_node_t *right)
+{
+    const ssize_t left_val  = get_container(ssize_t_bintree_node_t, node, left)->value;
+    const ssize_t right_val = get_container(ssize_t_bintree_node_t, node, right)->value;
+    return left_val <= right_val;
+}
 
 static void insert_node(bintree_root_t *t,
-                        ssize_t_bintree_node_t *node)
+                        const ssize_t newvalue)
 {
     bintree_node_t *succ = t->node;
-    if (succ != NULL) {
+    ssize_t_bintree_node_t *node = (ssize_t_bintree_node_t *)
+        malloc(sizeof(ssize_t_bintree_node_t));
 
-        /* TODO */
+    node->value = newvalue;
+
+    while (succ != NULL) {
+        const ssize_t value = get_container(ssize_t_bintree_node_t, node, succ)->value;
+
+#if 0
+        printf("newvalue=%d value=%d\n",  (int)newvalue, (int)value);
+#endif
+        if (newvalue > value)
+            succ = succ->right;
+        else if (newvalue < value) {
+            if (succ->left == NULL)
+                break;
+            else
+                succ = succ->left;
+        }
+        else
+            break;  /* allow duplicate values */
     }
+
     bintree_insert(t, succ, &node->node);
+    ASSERT_EXP(__bintree_validate(t, ssize_t_less_then_comparator) == 0);
 }
 
 static void insert_values(bintree_root_t *t, size_t n)
 {
     size_t i;
-    ASSERT_EXP(bintree_validate(t) == 0);
-    for (i = 0; i < n; ++i) {
-        ssize_t_bintree_node_t *node = (ssize_t_bintree_node_t *)
-            malloc(sizeof(ssize_t_bintree_node_t));
-        node->value = GETRAND();
-        insert_node(t, node);
-        ASSERT_EXP(bintree_validate(t) == 0);
-    }
+    ASSERT_EXP(__bintree_validate(t, ssize_t_less_then_comparator) == 0);
+    for (i = 0; i < n; ++i)
+        insert_node(t, get_rand(1000));
 }
 
 static int test_bintree(int argc, char **argv)
 {
     bintree_root_t t;
+    int i;
 
-    srand((unsigned)time(NULL));
+    /* srand((unsigned)time(NULL)); */
 
-    bintree_init(&t);
-    ASSERT_EXP(bintree_validate(&t) == 0);
-
-    insert_values(&t, 1);
+    for (i = 0; i < 100; ++i) {
+        if (i == 21) {
+            bintree_init(&t);
+            ASSERT_EXP(__bintree_validate(&t, ssize_t_less_then_comparator) == 0);
+            insert_values(&t, 10);
+        }
+        else {
+            int j;
+            for (j = 0; j < 10; ++j)
+                (void)get_rand(1000);
+        }
+    }
 
     return 0;
 }

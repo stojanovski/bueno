@@ -38,6 +38,13 @@ void bintree_insert(bintree_root_t *root,
 void bintree_remove(bintree_root_t *root,
                     bintree_node_t *node);
 size_t bintree_size(bintree_root_t *root);
-int bintree_validate(bintree_root_t *root);
+
+/** @param less_then_comparator a user-supplied function which returns true if
+ * the left side is less then the right side; if duplicate values are allowed,
+ * then the the function should return true if the left side is less than and
+ * equal to the right side */
+int __bintree_validate(bintree_root_t *root,
+                       int (* less_then_comparator)(const bintree_node_t *,
+                                                    const bintree_node_t *));
 
 #endif  /* _TREE_H_ */

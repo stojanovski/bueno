@@ -41,17 +41,20 @@ static void rotate_right(bintree_node_t *parent)
     assert(parent != NULL);
 
     grandparent = parent->parent;
-    assert(grandparent != NULL);
     orig_left = parent->left;
     assert(orig_left != NULL);
 
     parent->parent = orig_left;
     parent->left = orig_left->right;
+    if (orig_left->right != NULL)
+        orig_left->right->parent = parent;
 
-    if (grandparent->left == parent)
-        grandparent->left = orig_left;
-    else
-        grandparent->right = orig_left;
+    if (grandparent != NULL) {
+        if (grandparent->left == parent)
+            grandparent->left = orig_left;
+        else
+            grandparent->right = orig_left;
+    }
 
     orig_left->right = parent;
     orig_left->parent = grandparent;
@@ -63,17 +66,20 @@ static void rotate_left(bintree_node_t *parent)
     assert(parent != NULL);
 
     grandparent = parent->parent;
-    assert(grandparent != NULL);
     orig_right = parent->right;
     assert(orig_right != NULL);
 
     parent->parent = orig_right;
     parent->right = orig_right->left;
+    if (orig_right->left != NULL)
+        orig_right->left->parent = parent;
 
-    if (grandparent->left == parent)
-        grandparent->left = orig_right;
-    else
-        grandparent->right = orig_right;
+    if (grandparent != NULL) {
+        if (grandparent->left == parent)
+            grandparent->left = orig_right;
+        else
+            grandparent->right = orig_right;
+    }
 
     orig_right->left = parent;
     orig_right->parent = grandparent;
@@ -133,9 +139,9 @@ start:
     }
 
     assert(grandparent != NULL);
-    assert(grandparent->color = BLACK);
+    assert(grandparent->color == BLACK);
     assert(node->parent != NULL);
-    assert(node->parent->color = RED);
+    assert(node->parent->color == RED);
 
     /* The parent is red, but the uncle is black; node is left (right) of
      * parent, parent is left (right) of grandparent ("Case 5") */
@@ -530,71 +536,132 @@ size_t bintree_size(bintree_root_t *root)
     return root->size;
 }
 
+/* used for tree correctness validation */
 struct bintree_tracker_t
 {
-    int max_black_depth_is_set;
     size_t max_black_depth;
+    size_t depth;
     size_t black_depth;
     size_t tree_size;
+    bintree_root_t *root;
+    int (* less_then_comparator)(const bintree_node_t *, const bintree_node_t *);
+    const bintree_node_t *prev_comp;
 };
 
-static int bintree_validate_traverse(bintree_node_t *node,
+/* just a wrapper: to put a breakpoint in */
+static int VALIDATE_RETVAL(int ret)
+{
+    if (ret)
+        return ret;
+    return 0;
+}
+
+static int bintree_validate_traverse(const bintree_node_t *node,
                                      struct bintree_tracker_t *tr)
 {
     int ret;
-    assert(node != NULL);
 
+    if (node == NULL)
+        return VALIDATE_RETVAL(0);
+
+    ++tr->depth;
     ++tr->tree_size;
     if (node->color == BLACK)
         ++tr->black_depth;
 
-    if (has_no_children(node)) {
-        if (tr->max_black_depth_is_set) {
-            if (tr->black_depth != tr->max_black_depth)
-                return -1;
-        }
-        else {
-            tr->max_black_depth_is_set = 1;
-            tr->max_black_depth = tr->black_depth;
-        }
+#if 0
+    printf("tree validate cnt=%u color=%c depth=%u\n",
+        (unsigned)tr->tree_size,
+        node->color == RED ? 'R' : 'B',
+        (unsigned)tr->depth);
+#endif
 
-        return 0;
+    /* check child-parent relationships */
+    if (node->parent != NULL) {
+        if (node->parent->left != node && node->parent->right != node)
+            return VALIDATE_RETVAL(-3);
+    }
+
+    /* check if parents lead to tree's root */
+    {
+        const bintree_node_t *cur = node;
+        while (cur->parent != NULL)
+            cur = cur->parent;
+        if (cur != tr->root->node)
+            return VALIDATE_RETVAL(-4);
+    }
+
+    if (has_no_children(node)) {
+        assert(tr->black_depth > 0);
+
+        if (tr->max_black_depth > 0) {
+            if (tr->black_depth != tr->max_black_depth) {
+                ret = VALIDATE_RETVAL(-1);
+                goto done;
+            }
+        }
+        else
+            tr->max_black_depth = tr->black_depth;
+
+        ret = VALIDATE_RETVAL(0);
+        goto done;
     }
 
     ret = bintree_validate_traverse(node->left, tr);
+
+    /* check if values are stored in order */
+    if (tr->less_then_comparator != NULL && tr->prev_comp != NULL) {
+        if (tr->less_then_comparator(tr->prev_comp, node) == 0) {
+            ret = VALIDATE_RETVAL(-5);
+            goto done;
+        }
+    }
+    tr->prev_comp = node;
+
     if (ret == 0)
         ret = bintree_validate_traverse(node->right, tr);
 
-    If (node->color == BLACK)
+done:
+    if (node->color == BLACK) {
+        assert(tr->black_depth > 0);
         --tr->black_depth;
+    }
+    --tr->depth;
 
     return ret;
 }
 
-int bintree_validate(bintree_root_t *root)
+int __bintree_validate(bintree_root_t *root,
+                       int (* less_then_comparator)(const bintree_node_t *,
+                                                    const bintree_node_t *))
 {
     int ret;
     struct bintree_tracker_t tr;
-    tr.max_black_depth_is_set = 0;
     tr.max_black_depth = 0;
+    tr.depth = 0;
     tr.black_depth = 0;
     tr.tree_size = 0;
+    tr.root = root;
+    tr.less_then_comparator = less_then_comparator;
+    tr.prev_comp = NULL;
 
     if (root->node == NULL) {
         /* empty tree is valid */
-        return root->size == 0 ? 0 : -2;
+        return VALIDATE_RETVAL(root->size == 0 ? 0 : -2);
     }
     else if (has_no_children(root->node)) {
         /* when tree has one node, it must be black */
         if (root->node->color == BLACK)
-            return root->size == 1 ? 0 : -2;
+            return VALIDATE_RETVAL(root->size == 1 ? 0 : -2);
         else
-            return -1;
+            return VALIDATE_RETVAL(-3);
     }
+    else if (root->node->color != BLACK)
+        return VALIDATE_RETVAL(-3);  /* first node must be black */
 
     ret = bintree_validate_traverse(root->node, &tr);
     if (ret == 0)
-        return root->size == tr.tree_size ? 0 : -2;
+        return VALIDATE_RETVAL(root->size == tr.tree_size ? 0 : -2);
 
     return ret;
 }
