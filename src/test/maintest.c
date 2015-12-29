@@ -354,16 +354,45 @@ static void insert_node(bintree_root_t *t,
     bintree_balance(t, &newnode->node);
 }
 
-static void insert_values(bintree_root_t *t, size_t n)
+static void insert_values(bintree_root_t *t, size_t n, size_t range)
 {
     size_t i;
     for (i = 0; i < n; ++i)
-        insert_node(t, get_rand(1000000000));
+        insert_node(t, get_rand(range));
+}
+
+static bintree_node_t *find_node(bintree_root_t *t, ssize_t findvalue)
+{
+    bintree_node_t *cur = t->node;
+
+    while (cur != NULL) {
+        const ssize_t value =
+            get_container(ssize_t_bintree_node_t, node, cur)->value;
+
+        if (findvalue > value)
+            cur = cur->right;
+        else if (findvalue < value)
+            cur = cur->left;
+        else
+            return cur;
+    }
+
+    return NULL;
+}
+
+static void try_remove_node(bintree_root_t *t, size_t range)
+{
+    bintree_node_t *node = find_node(t, get_rand(range));
+    if (node != NULL) {
+        bintree_remove(t, node);
+        ASSERT_EXP(__bintree_validate(t, ssize_t_less_then_comparator) == 0);
+    }
 }
 
 static int test_bintree(int argc, char **argv)
 {
     bintree_root_t t;
+#if 1
     int i;
 
     srand((unsigned)time(NULL));
@@ -371,12 +400,21 @@ static int test_bintree(int argc, char **argv)
     for (i = 0; i < 1000; ++i) {
             bintree_init(&t);
             ASSERT_EXP(__bintree_validate(&t, ssize_t_less_then_comparator) == 0);
-            insert_values(&t, 1000);
+            insert_values(&t, 1000, 1000000000);
             if (i % 100 == 0)
                 printf("i=%d size=%u\n", i, (unsigned)bintree_size(&t));
             ASSERT_EXP(__bintree_validate(&t, ssize_t_less_then_comparator) == 0);
             bintree_clear(&t, ssize_t_free_func);
     }
+#else
+
+    bintree_init(&t);
+    insert_values(&t, 10, 1000);
+    ASSERT_EXP(__bintree_validate(&t, ssize_t_less_then_comparator) == 0);
+    while (bintree_size(&t) > 0)
+        try_remove_node(&t, 1000);
+    bintree_clear(&t, ssize_t_free_func);
+#endif
 
     return 0;
 }
