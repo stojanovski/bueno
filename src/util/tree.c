@@ -162,62 +162,32 @@ static void update_root_if_needed(bintree_root_t *root)
     }
 }
 
-void bintree_insert(bintree_root_t *root,
-                    bintree_node_t *succ,
+void bintree_attach(bintree_node_t **leaf,
+                    bintree_node_t *parent,
                     bintree_node_t *node)
 {
-    assert(root != NULL);
-
-    /* this node will be added as a leaf initially */
+    /* parent may or may not be null */
+    assert(leaf != NULL && node != NULL);
+    assert(*leaf == NULL);
+    *leaf = node;
+    node->parent = parent;
     node->left = node->right = NULL;
-
-    if (succ == NULL) {
-        /* asked to insert node as largest tree element or the tree is empty */
-
-        bintree_node_t *cur;
-
-        if (root->node == NULL) {
-            /* the tree is empty: insert node as black */
-            assert(root->size == 0);
-            node->parent = NULL;
-            node->color = BLACK;
-            root->node = node;
-            root->size = 1;
-            return;
-        }
-        else {
-            /* insert as largest value node, mark as red before rebalancing */
-
-            /* find the current max value node */
-            cur = root->node;
-            while (cur->right != NULL)
-                cur = cur->right;
-
-            cur->right = node;
-            node->parent = cur;
-        }
-    }
-    else {
-        /* asked to insert right before a successor node */
-
-        /* find succ's predecessor node; make node a right child of it */
-        bintree_node_t *pred = succ->left;
-        if (pred != NULL) {
-            while (pred->right != NULL)
-                pred = pred->right;
-            pred->right = node;
-            node->parent = pred;
-        }
-        else {
-            /* succ is the smallest value node in the tree: just attach
-             * node to it */
-            succ->left = node;
-            node->parent = succ;
-        }
-    }
-
-    /* always set node as red leaf before rebalancing */
     node->color = RED;
+}
+
+void bintree_balance(bintree_root_t *root,
+                     bintree_node_t *node)
+{
+    assert(node->color == RED);
+    if (root->size == 0) {
+        /* the tree was empty: insert node as black */
+        assert(root->node == node);
+        assert(root->node->right == NULL);
+        assert(root->node->left == NULL);
+        root->node->color = BLACK;
+        root->size = 1;
+        return;
+    }
 
     rebalance_after_insert(node);
     update_root_if_needed(root);
@@ -534,6 +504,25 @@ done:
 size_t bintree_size(bintree_root_t *root)
 {
     return root->size;
+}
+
+void bintree_clear_traverse(bintree_node_t *node,
+                            void (* free_func)(bintree_node_t *))
+{
+    if (node != NULL) {
+        bintree_clear_traverse(node->left, free_func);
+        bintree_clear_traverse(node->right, free_func);
+        free_func(node);
+    }
+}
+
+void bintree_clear(bintree_root_t *root,
+                   void (* free_func)(bintree_node_t *))
+{
+    if (free_func != NULL)
+        bintree_clear_traverse(root->node, free_func);
+    root->node = NULL;
+    root->size = 0;
 }
 
 /* used for tree correctness validation */

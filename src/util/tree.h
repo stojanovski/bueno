@@ -17,6 +17,10 @@
 #ifndef _TREE_H_
 #define _TREE_H_
 
+/* inspired by linux kernel's container_of() macro */
+#define get_container(type, member, ptr) \
+    ((type *)(((char *)(ptr)) - ((char *)&(((type *)0)->member))))
+
 typedef struct _bintree_node_t
 {
     struct _bintree_node_t *parent;
@@ -32,12 +36,16 @@ typedef struct _bintree_root_t
 } bintree_root_t;
 
 void bintree_init(bintree_root_t *root);
-void bintree_insert(bintree_root_t *root,
-                    bintree_node_t *succ,
+void bintree_attach(bintree_node_t **leaf,
+                    bintree_node_t *parent,
                     bintree_node_t *node);
+void bintree_balance(bintree_root_t *root,
+                     bintree_node_t *node);
 void bintree_remove(bintree_root_t *root,
                     bintree_node_t *node);
 size_t bintree_size(bintree_root_t *root);
+void bintree_clear(bintree_root_t *root,
+                   void (* free_func)(bintree_node_t *));
 
 /** @param less_then_comparator a user-supplied function which returns true if
  * the left side is less then the right side; if duplicate values are allowed,
