@@ -372,8 +372,10 @@ static void insert_node(bintree_root_t *t,
 static void insert_values(bintree_root_t *t, size_t n, size_t range)
 {
     size_t i;
-    for (i = 0; i < n; ++i)
+    for (i = 0; i < n; ++i) {
         insert_node(t, get_rand(range));
+        ASSERT_ZERO(__bintree_validate(t, ssize_t_less_then_comparator));
+    }
 }
 
 static bintree_node_t *find_node(bintree_root_t *t, ssize_t findvalue)
@@ -397,7 +399,8 @@ static bintree_node_t *find_node(bintree_root_t *t, ssize_t findvalue)
 
 static void try_remove_node(bintree_root_t *t, size_t range)
 {
-    bintree_node_t *node = find_node(t, get_rand(range));
+    const ssize_t value = (ssize_t)get_rand(range);
+    bintree_node_t *node = find_node(t, value);
     if (node != NULL) {
         bintree_remove(t, node);
         ASSERT_ZERO(__bintree_validate(t, ssize_t_less_then_comparator));

@@ -289,10 +289,15 @@ static void replace_node(bintree_node_t *dst, bintree_node_t *src)
         }
     }
 
-    /* fit dst node into src's tree location */
+    if (dst == src->right) {
+        dst->left = src->left;
+    }
+    else {
+        assert(dst == src->left);
+        dst->right = src->right;
+    }
+
     dst->parent = src_parent;
-    dst->left = src->left;
-    dst->right = src->right;
 }
 
 static int has_no_children(const bintree_node_t *node)
@@ -581,9 +586,13 @@ static int bintree_validate_traverse(const bintree_node_t *node,
     }
 
     /* check for self-reference */
+    if (node->left == node || node->right == node)
+        return VALIDATE_RETVAL(-5);
+
+    if (node->parent != NULL && (node->left == node->parent ||
+                                 node->right == node->parent))
     {
-        if (node->left == node || node->right == node)
-            return VALIDATE_RETVAL(-5);
+        return VALIDATE_RETVAL(-6);
     }
 
     if (has_no_children(node)) {
