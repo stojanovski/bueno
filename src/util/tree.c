@@ -225,6 +225,11 @@ static void swap_parent_child_pointers(bintree_node_t *first,
     update_parents(second, first);
 }
 
+static int has_no_children(const bintree_node_t *node)
+{
+    return node->left == NULL && node->right == NULL;
+}
+
 /* swap two nodes' positions wihtin a tree */
 static void swap_nodes(bintree_node_t *first, bintree_node_t *second)
 {
@@ -232,6 +237,7 @@ static void swap_nodes(bintree_node_t *first, bintree_node_t *second)
     assert(first != NULL);
     assert(second != NULL);
     assert(first != second);
+    assert(has_no_children(second));  /* must be a leaf!!! */
 
     swap_parent_child_pointers(first, second);
 
@@ -242,6 +248,12 @@ static void swap_nodes(bintree_node_t *first, bintree_node_t *second)
     tmp_color = first->color;
     first->color = second->color;
     second->color = tmp_color;
+
+    /* update children's child pointers */
+    if (second->left != NULL)
+        second->left->parent = second;
+    if (second->right != NULL)
+        second->right->parent = second;
 }
 
 /* find the successor value node, then swap these two nodes */
@@ -298,11 +310,6 @@ static void replace_node(bintree_node_t *dst, bintree_node_t *src)
     }
 
     dst->parent = src_parent;
-}
-
-static int has_no_children(const bintree_node_t *node)
-{
-    return node->left == NULL && node->right == NULL;
 }
 
 static int has_one_child(const bintree_node_t *node)
@@ -430,7 +437,7 @@ start_over:
     if (sib != NULL &&
         sib->color == BLACK)
     {
-        sib->color = sib->parent->color;
+        sib->color = node->parent->color;
         sib->parent->color = BLACK;
         if (sib_on_right) {
             sib->right->color = BLACK;
