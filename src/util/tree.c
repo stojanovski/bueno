@@ -276,7 +276,7 @@ static void detach_node(bintree_node_t *node)
 static void replace_node(bintree_node_t *dst, bintree_node_t *src)
 {
     bintree_node_t *src_parent = src->parent;
-    assert(src->left == NULL && src->right == NULL);
+    assert(src->left == dst || src->right == dst);
     assert(src == dst->parent);  /* src *must* be dst's parent! */
 
     /* update parent's left/right to the destination node */
@@ -578,6 +578,12 @@ static int bintree_validate_traverse(const bintree_node_t *node,
             cur = cur->parent;
         if (cur != tr->root->node)
             return VALIDATE_RETVAL(-4);
+    }
+
+    /* check for self-reference */
+    {
+        if (node->left == node || node->right == node)
+            return VALIDATE_RETVAL(-5);
     }
 
     if (has_no_children(node)) {

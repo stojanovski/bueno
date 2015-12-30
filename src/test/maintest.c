@@ -209,12 +209,27 @@ static void test_assert(int expr,
     if (!expr) {
         printf("\nASSERT ERROR:\n");
         printf("%s:%u: %s\n", file, line, assert_msg);
-        exit(19);
+        abort();
     }
+}
+
+static void abort_expression_return(const char *expr,
+                                    int ret,
+                                    const char *file,
+                                    unsigned line)
+{
+    printf("\nASSERT ERROR:\n");
+    printf("%s:%u: Exression  %s  returned %d.\n", file, line, expr, ret);
+    abort();
 }
 
 #define ASSERT_MSG(expr, msg) test_assert((expr), (msg), __FILE__, __LINE__)
 #define ASSERT_EXP(expr) test_assert((expr), #expr, __FILE__, __LINE__)
+#define ASSERT_ZERO(expr) do { \
+    int ret; \
+    if ((ret = (expr)) != 0) \
+        abort_expression_return(#expr, ret, __FILE__, __LINE__); \
+    } while(0)
 
 #define TEST_TXT_FILE "test.txt"
 
@@ -385,32 +400,32 @@ static void try_remove_node(bintree_root_t *t, size_t range)
     bintree_node_t *node = find_node(t, get_rand(range));
     if (node != NULL) {
         bintree_remove(t, node);
-        ASSERT_EXP(__bintree_validate(t, ssize_t_less_then_comparator) == 0);
+        ASSERT_ZERO(__bintree_validate(t, ssize_t_less_then_comparator));
     }
 }
 
 static int test_bintree(int argc, char **argv)
 {
     bintree_root_t t;
-#if 1
+#if 0
     int i;
 
     srand((unsigned)time(NULL));
 
     for (i = 0; i < 1000; ++i) {
             bintree_init(&t);
-            ASSERT_EXP(__bintree_validate(&t, ssize_t_less_then_comparator) == 0);
+            ASSERT_ZERO(__bintree_validate(&t, ssize_t_less_then_comparator));
             insert_values(&t, 1000, 1000000000);
             if (i % 100 == 0)
                 printf("i=%d size=%u\n", i, (unsigned)bintree_size(&t));
-            ASSERT_EXP(__bintree_validate(&t, ssize_t_less_then_comparator) == 0);
+            ASSERT_ZERO(__bintree_validate(&t, ssize_t_less_then_comparator));
             bintree_clear(&t, ssize_t_free_func);
     }
 #else
 
     bintree_init(&t);
     insert_values(&t, 10, 1000);
-    ASSERT_EXP(__bintree_validate(&t, ssize_t_less_then_comparator) == 0);
+    ASSERT_ZERO(__bintree_validate(&t, ssize_t_less_then_comparator));
     while (bintree_size(&t) > 0)
         try_remove_node(&t, 1000);
     bintree_clear(&t, ssize_t_free_func);
