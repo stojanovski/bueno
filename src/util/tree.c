@@ -254,6 +254,9 @@ static void swap_nodes(bintree_node_t *first, bintree_node_t *second)
         second->left->parent = second;
     if (second->right != NULL)
         second->right->parent = second;
+    if (first->right != NULL)
+        first->right->parent = second;
+    assert(first->left == NULL);
 }
 
 /* find the successor value node, then swap these two nodes */
