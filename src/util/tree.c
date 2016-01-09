@@ -202,6 +202,7 @@ static void swap_node_pointers(bintree_node_t **first,
     *second = tmp_node;
 }
 
+#if 1
 /* set parent child link to newnode */
 static void update_parents(const bintree_node_t * const orig,
                            bintree_node_t * const newnode)
@@ -216,13 +217,26 @@ static void update_parents(const bintree_node_t * const orig,
         }
     }
 }
+#else
+static void swap_node_values(bintree_node_t **first,
+                             bintree_node_t **second)
+{
+     bintree_node_t *tmp = *first;
+     *first = *second;
+     *second = tmp;
+}
+#endif
 
 /* swap two nodes' parent child link */
 static void swap_parent_child_pointers(bintree_node_t *first,
                                        bintree_node_t *second)
 {
+#if 1
     update_parents(first, second);
     update_parents(second, first);
+#else
+    swap_node_values(&first->parent, &second->parent);
+#endif
 }
 
 static int has_no_children(const bintree_node_t *node)
@@ -237,7 +251,6 @@ static void swap_nodes(bintree_node_t *first, bintree_node_t *second)
     assert(first != NULL);
     assert(second != NULL);
     assert(first != second);
-    assert(has_no_children(second));  /* must be a leaf!!! */
 
     swap_parent_child_pointers(first, second);
 
@@ -385,8 +398,8 @@ start_over:
     if (sib != NULL &&
         sib->color == BLACK &&
         node->parent->color == BLACK &&
-        sib->left != NULL && sib->left->color == BLACK &&
-        sib->right != NULL && sib->right->color == BLACK)
+        (sib->left == NULL || sib->left->color == BLACK) &&
+        (sib->right == NULL || sib->right->color == BLACK))
     {
         sib->color = RED;
         node = node->parent;
@@ -399,8 +412,8 @@ start_over:
     if (sib != NULL &&
         sib->color == BLACK &&
         node->parent->color == RED &&
-        sib->left != NULL && sib->left->color == BLACK &&
-        sib->right != NULL && sib->right->color == BLACK)
+        (sib->left == NULL || sib->left->color == BLACK) &&
+        (sib->right == NULL || sib->right->color == BLACK))
     {
         sib->color = RED;
         node->parent->color = BLACK;
@@ -416,14 +429,14 @@ start_over:
     {
         if (sib_on_right &&
             sib->left != NULL && sib->left->color == RED &&
-            sib->right != NULL && sib->right->color == BLACK)
+            (sib->right == NULL || sib->right->color == BLACK))
         {
             sib->color = RED;
             sib->left->color = BLACK;
             rotate_right(sib);
         }
         else if (!sib_on_right &&
-            sib->left != NULL && sib->left->color == BLACK &&
+            (sib->left == NULL || sib->left->color == BLACK) &&
             sib->right != NULL && sib->right->color == RED)
         {
             sib->color = RED;
@@ -475,6 +488,7 @@ remove_one_child_node:
         assert(child->color == RED);
         replace_node(child, node);
         child->color = BLACK;
+        root->node = child;  /* this helps find the new root below */
         goto done;
     }
 
