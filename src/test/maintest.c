@@ -404,6 +404,7 @@ static void try_remove_node(bintree_root_t *t, size_t range)
     if (node != NULL) {
         bintree_remove(t, node);
         ASSERT_ZERO(__bintree_validate(t, ssize_t_less_then_comparator));
+        ssize_t_free_func(node);
     }
 }
 
@@ -426,9 +427,9 @@ static int test_bintree(int argc, char **argv)
     }
 #else
 
-    for (i = 0; i < 10; ++i) {
+    for (i = 0; i < 1000; ++i) {
         bintree_init(&t);
-        insert_values(&t, 10, 1000);
+        insert_values(&t, 100, 1000);
         ASSERT_ZERO(__bintree_validate(&t, ssize_t_less_then_comparator));
         while (bintree_size(&t) > 0)
             try_remove_node(&t, 1000);

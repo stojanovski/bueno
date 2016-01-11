@@ -202,10 +202,9 @@ static void swap_node_pointers(bintree_node_t **first,
     *second = tmp_node;
 }
 
-#if 1
 /* set parent child link to newnode */
-static void update_parents(const bintree_node_t * const orig,
-                           bintree_node_t * const newnode)
+static void update_parent_child(const bintree_node_t * const orig,
+                                bintree_node_t * const newnode)
 {
     bintree_node_t *orig_parent = orig->parent;
     if (orig_parent != NULL) {
@@ -217,27 +216,6 @@ static void update_parents(const bintree_node_t * const orig,
         }
     }
 }
-#else
-static void swap_node_values(bintree_node_t **first,
-                             bintree_node_t **second)
-{
-     bintree_node_t *tmp = *first;
-     *first = *second;
-     *second = tmp;
-}
-#endif
-
-/* swap two nodes' parent child link */
-static void swap_parent_child_pointers(bintree_node_t *first,
-                                       bintree_node_t *second)
-{
-#if 1
-    update_parents(first, second);
-    update_parents(second, first);
-#else
-    swap_node_values(&first->parent, &second->parent);
-#endif
-}
 
 static int has_no_children(const bintree_node_t *node)
 {
@@ -245,31 +223,53 @@ static int has_no_children(const bintree_node_t *node)
 }
 
 /* swap two nodes' positions wihtin a tree */
-static void swap_nodes(bintree_node_t *first, bintree_node_t *second)
+static void swap_with_successor_node(bintree_node_t *node,
+                                     bintree_node_t *succ)
 {
     unsigned char tmp_color;
-    assert(first != NULL);
-    assert(second != NULL);
-    assert(first != second);
+    assert(succ != NULL);
+    assert(node != NULL);
+    assert(succ != node);
 
-    swap_parent_child_pointers(first, second);
+    if (succ->parent == node) {
+        assert(node->right == succ);
 
-    swap_node_pointers(&first->parent, &second->parent);
-    swap_node_pointers(&first->left, &second->left);
-    swap_node_pointers(&first->right, &second->right);
+        /* update parent children first */
+        assert(succ->parent->left != succ);
+        update_parent_child(succ, node);  /* update succ's parent link */
+        update_parent_child(node, succ);  /* update node's parent link */
 
-    tmp_color = first->color;
-    first->color = second->color;
-    second->color = tmp_color;
+        succ->parent = node->parent;
+        node->parent = succ;
+        node->right = succ->right;
+        succ->right = node;
+    }
+    else {
+        /* update parent children first */
+        assert(succ->parent->left == succ);
+        succ->parent->left = node;        /* update succ's parent link */
+        update_parent_child(node, succ);  /* update node's parent link */
 
-    /* update children's child pointers */
-    if (second->left != NULL)
-        second->left->parent = second;
-    if (second->right != NULL)
-        second->right->parent = second;
-    if (first->right != NULL)
-        first->right->parent = second;
-    assert(first->left == NULL);
+        swap_node_pointers(&succ->parent, &node->parent);
+        swap_node_pointers(&succ->right, &node->right);
+    }
+
+    assert(succ->left == NULL);
+    succ->left = node->left;
+    node->left = NULL;
+
+    /* swap colors */
+    tmp_color = succ->color;
+    succ->color = node->color;
+    node->color = tmp_color;
+
+    /* update children's parent pointers */
+    if (node->right != NULL)
+        node->right->parent = node;
+    if (succ->left != NULL)
+        succ->left->parent = succ;
+    if (succ->right != NULL)
+        succ->right->parent = succ;
 }
 
 /* find the successor value node, then swap these two nodes */
@@ -283,7 +283,7 @@ static void swap_with_successor(bintree_node_t *node)
     while (right_min->left != NULL)
         right_min = right_min->left;
 
-    swap_nodes(node, right_min);
+    swap_with_successor_node(node, right_min);
 }
 
 static void detach_node(bintree_node_t *node)
@@ -562,7 +562,7 @@ struct bintree_tracker_t
     size_t black_depth;
     size_t tree_size;
     bintree_root_t *root;
-    int (* less_then_comparator)(const bintree_node_t *, const bintree_node_t *);
+    int (* less_than_comparator)(const bintree_node_t *, const bintree_node_t *);
     const bintree_node_t *prev_comp;
 };
 
@@ -638,8 +638,8 @@ static int bintree_validate_traverse(const bintree_node_t *node,
     ret = bintree_validate_traverse(node->left, tr);
 
     /* check if values are stored in order */
-    if (tr->less_then_comparator != NULL && tr->prev_comp != NULL) {
-        if (tr->less_then_comparator(tr->prev_comp, node) == 0) {
+    if (tr->less_than_comparator != NULL && tr->prev_comp != NULL) {
+        if (tr->less_than_comparator(tr->prev_comp, node) == 0) {
             ret = VALIDATE_RETVAL(-5);
             goto done;
         }
@@ -660,7 +660,7 @@ done:
 }
 
 int __bintree_validate(bintree_root_t *root,
-                       int (* less_then_comparator)(const bintree_node_t *,
+                       int (* less_than_comparator)(const bintree_node_t *,
                                                     const bintree_node_t *))
 {
     int ret;
@@ -670,7 +670,7 @@ int __bintree_validate(bintree_root_t *root,
     tr.black_depth = 0;
     tr.tree_size = 0;
     tr.root = root;
-    tr.less_then_comparator = less_then_comparator;
+    tr.less_than_comparator = less_than_comparator;
     tr.prev_comp = NULL;
 
     if (root->node == NULL) {
