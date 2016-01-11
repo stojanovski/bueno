@@ -412,9 +412,9 @@ static int test_bintree(int argc, char **argv)
 {
     bintree_root_t t;
     int i;
-#if 0
 
     srand((unsigned)time(NULL));
+#if 0
 
     for (i = 0; i < 1000; ++i) {
         bintree_init(&t);
