@@ -151,6 +151,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\json.c"
+				>
+			</File>
+			<File
 				RelativePath=".\str.c"
 				>
 			</File>
