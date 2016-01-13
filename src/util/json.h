@@ -19,6 +19,20 @@
 
 #include "str.h"
 
-void json_parse_string(strref_t *input, strref_t *output);
+enum json_code_t { JSON_DONE, JSON_NEED_MORE, JSON_INPUT_ERROR };
+
+typedef struct _json_string_t
+{
+    strref_t output;
+    /* stores escaping input data */
+    char input_lookback_buf[6];
+    strref_t input_lookback;
+    int had_escapes;
+} json_string_t;
+
+void json_string_init(json_string_t *jstr);
+void json_string_uninit(json_string_t *jstr);
+enum json_code_t json_string_parse(json_string_t *jstr, strref_t *next_chunk);
+strref_t *json_string_result(json_string_t *jstr);
 
 #endif  /* _JSON_H_ */
