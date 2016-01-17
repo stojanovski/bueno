@@ -469,14 +469,34 @@ static int strref_are_equal(strref_t *left, strref_t *right)
 static void test_one_json_string(char *instr,
                                  char *outstr,
                                  size_t max_bytes_per_parse,
-                                 size_t unconsumed_chars)
+                                 size_t unconsumed_chars,
+                                 enum json_code_t last_expected_retval)
 {
     json_string_t jstr;
-    strref_t inref = {0}, result = {0}, outref = {0};
+    strref_t inref = {0}, result = {0}, outref = {0}, next_chunk = {0};
+    enum json_code_t retval;
 
     json_string_init(&jstr);
 
-    json_string_parse(&jstr, strref_set_static(&inref, instr));
+    strref_set_static(&inref, instr);
+    assert(inref.size > 0);
+
+    while (1) {
+        size_t orig_chunk_size;
+        strref_assign(&next_chunk, &inref);
+        if (next_chunk.size > max_bytes_per_parse)
+            next_chunk.size = max_bytes_per_parse;
+        orig_chunk_size = next_chunk.size;
+
+        retval = json_string_parse(&jstr, &next_chunk);
+        strref_trim_front(&inref, orig_chunk_size - next_chunk.size);
+        if (next_chunk.size > 0)
+            break;  /* ran into double-quotes: done */
+        else if (inref.size == 0)
+            break; /* exhausted the input */
+    }
+
+    ASSERT_NONZERO(retval == last_expected_retval);
 
     json_string_result(&jstr, &result);
     json_string_uninit(&jstr);
@@ -484,16 +504,40 @@ static void test_one_json_string(char *instr,
     ASSERT_INT((int)inref.size, (int)unconsumed_chars);
     ASSERT_NONZERO(strref_are_equal(&result,
                                     strref_set_static(&outref, outstr)));
+
     strref_uninit(&inref);
     strref_uninit(&result);
     strref_uninit(&outref);
+    strref_uninit(&next_chunk);
 }
 
 static test_json_string()
 {
-    test_one_json_string("igor", "igor", 100, 0);
-    test_one_json_string("ig\\nor", "ig\nor", 100, 0);
-    test_one_json_string("ig\\tor\"", "ig\tor", 100, 1);
+    static const size_t bytes_per_parse[] = {100, 1, 2, 3};
+    unsigned i;
+
+    test_one_json_string("\\", "", 1, 0, JSON_NEED_MORE);
+
+    for (i = 0;
+         i < sizeof(bytes_per_parse) / sizeof(bytes_per_parse[0]);
+         ++i)
+    {
+        test_one_json_string("igor", "igor", bytes_per_parse[i], 0, JSON_READY);
+        test_one_json_string("igor", "igor", bytes_per_parse[i], 0, JSON_READY);
+        test_one_json_string("ig\\nor", "ig\nor", bytes_per_parse[i], 0, JSON_READY);
+        test_one_json_string("i\\rgor", "i\rgor", bytes_per_parse[i], 0, JSON_READY);
+        test_one_json_string("\\\\igor", "\\igor", bytes_per_parse[i], 0, JSON_READY);
+        test_one_json_string("igor\\\"", "igor\"", bytes_per_parse[i], 0, JSON_READY);
+        test_one_json_string("igo\\fr", "igo\fr", bytes_per_parse[i], 0, JSON_READY);
+        test_one_json_string("ig\\tor\"", "ig\tor", bytes_per_parse[i], 1, JSON_READY);
+        test_one_json_string("igor\\", "igor", bytes_per_parse[i], 0, JSON_NEED_MORE);
+        test_one_json_string("\n\"", "\n", bytes_per_parse[i], 1, JSON_READY);
+        test_one_json_string("\"X", "", bytes_per_parse[i], 2, JSON_READY);
+
+        /* unsupported escape char */
+        test_one_json_string("\\q", "", bytes_per_parse[i], 1, JSON_INPUT_ERROR);
+        test_one_json_string("a\\q", "a", bytes_per_parse[i], 1, JSON_INPUT_ERROR);
+    }
 }
 
 static int test_json(int argc, char **argv)

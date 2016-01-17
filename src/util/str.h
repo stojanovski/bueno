@@ -30,7 +30,10 @@ typedef struct _strref_t
 void *get_empty_strref_keeper__instance();
 
 void strref_init(strref_t *str, void *bookkeeper);
-size_t strref_size(strref_t *str);
+static size_t strref_size(strref_t *str)
+{
+    return str->size;
+}
 void strref_uninit(strref_t *str);
 void strref_clear(strref_t *str);
 const char *strref_readonly(strref_t *str);

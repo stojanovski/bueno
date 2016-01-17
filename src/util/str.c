@@ -40,11 +40,6 @@ typedef struct _strbuf_t
     char buf[0];
 } strbuf_t;
 
-size_t strref_size(strref_t *str)
-{
-    return str->size;
-}
-
 void strref_init(strref_t *str, void *bookkeeper)
 {
     memset(str, 0, sizeof(strref_t));

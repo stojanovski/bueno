@@ -59,39 +59,22 @@ escape_seq:
         return JSON_NEED_MORE;
 
     switch (*cur) {
-    case '"':
-        c = '"';
-        break;
-    case '\\':
-        c = '\\';
-        break;
-    case '/':
-        c = '/';
-        break;
-    case 'b':
-        c = '\b';
-        break;
-    case 'f':
-        c = '\f';
-        break;
-    case 'n':
-        c = '\n';
-        break;
-    case 'r':
-        c = '\r';
-        break;
-    case 't':
-        c = '\t';
-        break;
+    case '"':  c = '"';  break;
+    case '\\': c = '\\'; break;
+    case '/':  c = '/';  break;
+    case 'b':  c = '\b'; break;
+    case 'f':  c = '\f'; break;
+    case 'n':  c = '\n'; break;
+    case 'r':  c = '\r'; break;
+    case 't':  c = '\t'; break;
     default:
-        /* TODO: handle error */
-        break;
+        return JSON_INPUT_ERROR;
     }
 
     strref_trim_front(next_chunk, 1);
     /* TODO: make a fast "append char" function */
     char_buffer_append(output, &c, 1);
-
+    input_lookback->size = 0;
     ++cur;
 
     if (cur < end)
