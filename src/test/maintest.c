@@ -517,12 +517,12 @@ static test_json_string()
     unsigned i;
 
     test_one_json_string("\\", "", 1, 0, JSON_NEED_MORE);
+    test_one_json_string("\"", "", 1, 1, JSON_READY);
 
     for (i = 0;
          i < sizeof(bytes_per_parse) / sizeof(bytes_per_parse[0]);
          ++i)
     {
-        test_one_json_string("igor", "igor", bytes_per_parse[i], 0, JSON_READY);
         test_one_json_string("igor", "igor", bytes_per_parse[i], 0, JSON_READY);
         test_one_json_string("ig\\nor", "ig\nor", bytes_per_parse[i], 0, JSON_READY);
         test_one_json_string("i\\rgor", "i\rgor", bytes_per_parse[i], 0, JSON_READY);
