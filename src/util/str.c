@@ -16,7 +16,6 @@
 
 #include "str.h"
 #include <stdlib.h>
-#include <assert.h>
 #include <string.h>
 
 #define STRBUF_REF_CALL(strref_t_ptr, func) ((*((refcnted_strbuf_funcs_t **)((strref_t_ptr)->__bk)))->func((strref_t_ptr)->__bk))
@@ -431,4 +430,13 @@ void strarray_get_strref(strarray_t *arr, strref_t *str)
 {
     strref_assign(str, &arr->str);
     str->size = arr->size;
+}
+
+void strref_set_static(strref_t *str, char *null_term_str)
+{
+    strref_clear(str);
+    if (null_term_str != NULL) {
+        str->start = null_term_str;
+        str->size = strlen(null_term_str);
+    }
 }

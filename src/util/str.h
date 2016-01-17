@@ -17,6 +17,8 @@
 #ifndef STR_H
 #define STR_H
 
+#include <assert.h>
+
 typedef struct _strref_t
 {
     char *start;
@@ -38,6 +40,26 @@ void strref_copy_char(strref_t *str, const char *start, size_t size);
 void strref_assign(strref_t *dest, strref_t *src);
 void strref_take_ownership(strref_t *dest, strref_t *src);
 void strref_copy(strref_t *dest, strref_t *src);
+static void strref_trim_front(strref_t *str, size_t len)
+{
+    assert(str->start != (char *)0);
+    assert(str->size >= len);
+    str->start += len;
+    str->size -= len;
+}
+static void strref_trim_back(strref_t *str, size_t len)
+{
+    assert(str->start != (char *)0);
+    assert(str->size >= len);
+    str->size -= len;
+}
+static void strref_get_start_and_end(strref_t *str, char **start, char **end)
+{
+    assert(str->start != (char *)0);
+    *start = str->start;
+    *end = *start + str->size;
+}
+void strref_set_static(strref_t *str, char *null_term_str);
 
 #define STRREF_INIT_CAPACITY(strref_t_ptr, size_in_bytes) \
     do { \

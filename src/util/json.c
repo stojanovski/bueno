@@ -4,41 +4,112 @@
 
 void json_string_init(json_string_t *jstr)
 {
-    memset(jstr, 0, sizeof(json_string_t));
     jstr->input_lookback.start = jstr->input_lookback_buf;
     jstr->input_lookback.size = 0;
+    char_buffer_init(&jstr->output);
 }
 
 void json_string_uninit(json_string_t *jstr)
 {
-    strref_uninit(&jstr->output);
+    char_buffer_uninit(&jstr->output);
 }
 
 enum json_code_t json_string_parse(json_string_t *jstr, strref_t *next_chunk)
 {
-    strref_t *output = &jstr->output;
-    const char *inp;
+    struct char_buffer_t *output = &jstr->output;
+    strref_t *input_lookback = &jstr->input_lookback;
+    char *cur, *end;
+    char c;
 
-    if (jstr->had_escapes) {
-        assert(output->size > 0); /* must at least contain the double-quotes */
-        goto after_escapes;
+    assert(next_chunk->size > 0);  /* always expect some input */
+
+    strref_get_start_and_end(next_chunk, &cur, &end);
+
+    assert(cur < end);
+    if (input_lookback->size > 0)
+        goto escape_seq;
+
+parse:
+    do {
+        if (*cur == '"')
+            goto done;
+        else if (*cur == '\\') {
+            if (cur > next_chunk->start) {
+                const size_t len = cur - next_chunk->start;
+                char_buffer_append(output, next_chunk->start, len);
+                strref_trim_front(next_chunk, len);
+            }
+            goto escape_seq;
+        }
+    } while (++cur < end);
+    goto done;
+
+escape_seq:
+    assert(cur < end);
+    assert(input_lookback->size > 0 || *cur == '\\');
+    if (input_lookback->size == 0) {
+        *input_lookback->start = '\\';
+        input_lookback->size = 1;
+        ++cur;
+        strref_trim_front(next_chunk, 1);
     }
-    else if (output->size == 0) {
-        strref_assign(output, next_chunk);
+    assert(*input_lookback->start == '\\');
 
-        /* "next_chunk" must contain at least the opening double-quotes */
-        assert(output->size > 0);
-        assert(*output->start == '"');
+    if (cur == end)
+        return JSON_NEED_MORE;
 
-        /* don't expect anything inside the lookback buffer */
-        assert(jstr->input_lookback.size == 0);
+    switch (*cur) {
+    case '"':
+        c = '"';
+        break;
+    case '\\':
+        c = '\\';
+        break;
+    case '/':
+        c = '/';
+        break;
+    case 'b':
+        c = '\b';
+        break;
+    case 'f':
+        c = '\f';
+        break;
+    case 'n':
+        c = '\n';
+        break;
+    case 'r':
+        c = '\r';
+        break;
+    case 't':
+        c = '\t';
+        break;
+    default:
+        /* TODO: handle error */
+        break;
     }
 
-after_escapes:
-    return JSON_DONE;
+    strref_trim_front(next_chunk, 1);
+    /* TODO: make a fast "append char" function */
+    char_buffer_append(output, &c, 1);
+
+    ++cur;
+
+    if (cur < end)
+        goto parse;
+
+done:
+    /* TODO: check if there is unprocessed escape sequence */
+
+    {
+        const size_t len = cur - next_chunk->start;
+        char_buffer_append(output, next_chunk->start, len);
+        strref_trim_front(next_chunk, len);
+    }
+
+    return JSON_READY;
 }
 
-strref_t *json_string_result(json_string_t *jstr)
+void json_string_result(json_string_t *jstr, strref_t *result)
 {
-    return &jstr->output;
+    char_buffer_get(&jstr->output, result);
 }

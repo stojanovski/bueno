@@ -17,6 +17,7 @@
 #include "../util/str.h"
 #include "../util/io.h"
 #include "../util/tree.h"
+#include "../util/json.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -230,6 +231,16 @@ static void abort_expression_return(const char *expr,
     if ((ret = (expr)) != 0) \
         abort_expression_return(#expr, ret, __FILE__, __LINE__); \
     } while(0)
+#define ASSERT_NONZERO(expr) do { \
+    int ret; \
+    if ((ret = (expr)) == 0) \
+        abort_expression_return(#expr, ret, __FILE__, __LINE__); \
+    } while(0)
+#define ASSERT_INT(expr, int_val) do { \
+    int ret; \
+    if ((ret = (expr)) != int_val) \
+        abort_expression_return(#expr, ret, __FILE__, __LINE__); \
+    } while(0)
 
 #define TEST_TXT_FILE "test.txt"
 
@@ -441,6 +452,53 @@ static int test_bintree(int argc, char **argv)
     return 0;
 }
 
+/* TEST json */
+
+static print_strref(strref_t *str)
+{
+    fwrite(str->start, 1, str->size, stdout);
+}
+
+static int strref_are_equal(strref_t *left, strref_t *right)
+{
+    if (left->size == right->size)
+        return memcmp(left->start, right->start, left->size) == 0;
+    return 0;
+}
+
+static void test_one_json_string(char *instr, char *outstr, size_t consumed_chars)
+{
+    json_string_t jstr;
+    strref_t inref = {0}, result = {0}, outref = {0};
+    size_t instr_size;
+
+    json_string_init(&jstr);
+    strref_set_static(&inref, instr);
+    instr_size = inref.size;
+
+    json_string_parse(&jstr, &inref);
+    json_string_result(&jstr, &result);
+    json_string_uninit(&jstr);
+
+    ASSERT_INT((int)(instr_size - inref.size), (int)consumed_chars);
+    strref_set_static(&inref, instr);
+    strref_set_static(&outref, outstr);
+    ASSERT_NONZERO(strref_are_equal(&result, &outref));
+}
+
+static test_json_string()
+{
+    test_one_json_string("igor", "igor", 4);
+    test_one_json_string("ig\\nor", "ig\nor", 6);
+    test_one_json_string("ig\\tor\"", "ig\tor", 6);
+}
+
+static int test_json(int argc, char **argv)
+{
+    test_json_string();
+    return 0;
+}
+
 /****************************************************************************/
 
 static struct {
@@ -451,6 +509,7 @@ static struct {
 } argopts[] = {
     {"test_line_reader", test_line_reader, 0, ""},
     {"test_bintree", test_bintree, 0, ""},
+    {"test_json", test_json, 0, ""},
 };
 static const unsigned argopts_size = sizeof(argopts) / sizeof(argopts[0]);
 
