@@ -59,7 +59,7 @@ static void strref_get_start_and_end(strref_t *str, char **start, char **end)
     *start = str->start;
     *end = *start + str->size;
 }
-void strref_set_static(strref_t *str, char *null_term_str);
+strref_t *strref_set_static(strref_t *str, char *null_term_str);
 
 #define STRREF_INIT_CAPACITY(strref_t_ptr, size_in_bytes) \
     do { \

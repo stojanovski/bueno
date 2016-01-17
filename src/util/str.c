@@ -432,11 +432,12 @@ void strarray_get_strref(strarray_t *arr, strref_t *str)
     str->size = arr->size;
 }
 
-void strref_set_static(strref_t *str, char *null_term_str)
+strref_t *strref_set_static(strref_t *str, char *null_term_str)
 {
     strref_clear(str);
     if (null_term_str != NULL) {
         str->start = null_term_str;
         str->size = strlen(null_term_str);
     }
+    return str;
 }

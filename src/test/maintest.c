@@ -466,31 +466,34 @@ static int strref_are_equal(strref_t *left, strref_t *right)
     return 0;
 }
 
-static void test_one_json_string(char *instr, char *outstr, size_t consumed_chars)
+static void test_one_json_string(char *instr,
+                                 char *outstr,
+                                 size_t max_bytes_per_parse,
+                                 size_t unconsumed_chars)
 {
     json_string_t jstr;
     strref_t inref = {0}, result = {0}, outref = {0};
-    size_t instr_size;
 
     json_string_init(&jstr);
-    strref_set_static(&inref, instr);
-    instr_size = inref.size;
 
-    json_string_parse(&jstr, &inref);
+    json_string_parse(&jstr, strref_set_static(&inref, instr));
+
     json_string_result(&jstr, &result);
     json_string_uninit(&jstr);
 
-    ASSERT_INT((int)(instr_size - inref.size), (int)consumed_chars);
-    strref_set_static(&inref, instr);
-    strref_set_static(&outref, outstr);
-    ASSERT_NONZERO(strref_are_equal(&result, &outref));
+    ASSERT_INT((int)inref.size, (int)unconsumed_chars);
+    ASSERT_NONZERO(strref_are_equal(&result,
+                                    strref_set_static(&outref, outstr)));
+    strref_uninit(&inref);
+    strref_uninit(&result);
+    strref_uninit(&outref);
 }
 
 static test_json_string()
 {
-    test_one_json_string("igor", "igor", 4);
-    test_one_json_string("ig\\nor", "ig\nor", 6);
-    test_one_json_string("ig\\tor\"", "ig\tor", 6);
+    test_one_json_string("igor", "igor", 100, 0);
+    test_one_json_string("ig\\nor", "ig\nor", 100, 0);
+    test_one_json_string("ig\\tor\"", "ig\tor", 100, 1);
 }
 
 static int test_json(int argc, char **argv)
