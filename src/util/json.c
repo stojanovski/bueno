@@ -179,6 +179,8 @@ void json_number_init(json_number_t *jnum)
     jnum->number.integer = 0;
     jnum->type = JSON_INTEGER;
     char_buffer_init(&jnum->buffer);
+    jnum->state = 0;
+    jnum->negative = 0;
 }
 
 void json_number_uninit(json_number_t *jnum)
@@ -186,9 +188,103 @@ void json_number_uninit(json_number_t *jnum)
     char_buffer_uninit(&jnum->buffer);
 }
 
+#define NUM_STATE_INIT 0
+#define NUM_STATE_GOT_MINUS 1
+#define NUM_STATE_GOT_ZERO 2
+#define NUM_STATE_GOT_SEPARATOR 3
+#define NUM_STATE_GOT_FRACTION_DIGIT 4
+
+#define IS_NONZERO_DIGIT(c) ((c) >= '1' && (c) <= '9')
+#define IS_DIGIT(c) ((c) >= '0' && (c) <= '9')
+
 enum json_code_t json_number_parse(json_number_t *jnum, strref_t *next_chunk)
 {
-    return JSON_READY;
+    enum json_code_t ret;
+    assert(next_chunk->size > 0);  /* always expect some input */
+
+    /* to prevent warning about unused jump label */
+    if (jnum->state == NUM_STATE_INIT)
+        goto at_NUM_STATE_INIT;
+
+    switch (jnum->state) {
+at_NUM_STATE_INIT:
+    case NUM_STATE_INIT:
+        switch (*next_chunk->start) {
+        case '0':
+            assert(jnum->type == JSON_INTEGER);
+            strref_trim_front(next_chunk, 1);
+            jnum->state = NUM_STATE_GOT_ZERO;
+            if (next_chunk->size == 0) {
+                ret = JSON_READY;
+                goto done;
+            }
+            goto at_NUM_STATE_GOT_ZERO;
+        default:
+            /* TODO: if (IS_NONZERO_DIGIT(*next_chunk->start)) { */
+            goto input_error;
+        }
+
+at_NUM_STATE_GOT_ZERO:
+    case NUM_STATE_GOT_ZERO:
+        assert(jnum->number.integer == 0);
+        switch (*next_chunk->start) {
+        case '.':
+            assert(jnum->type == JSON_INTEGER);
+            jnum->type = JSON_FLOATING;
+            assert(char_buffer_size(&jnum->buffer) == 0);
+            if (jnum->negative)
+                char_buffer_append(&jnum->buffer, "-0.", sizeof("-0.") - 1);
+            else
+                char_buffer_append(&jnum->buffer, "0.", sizeof("0.") - 1);
+            strref_trim_front(next_chunk, 1);
+            jnum->state = NUM_STATE_GOT_SEPARATOR;
+            if (next_chunk->size == 0) {
+                ret = JSON_NEED_MORE;
+                goto done;
+            }
+            goto at_NUM_STATE_GOT_SEPARATOR;
+        default:
+            ret = JSON_READY;
+            goto done;
+        }
+
+at_NUM_STATE_GOT_SEPARATOR:
+    case NUM_STATE_GOT_SEPARATOR:
+        /* after the decimal fraction separator, at least one digit is needed */
+        assert(next_chunk->size > 0);
+        if (!IS_DIGIT(*next_chunk->start))
+            goto input_error;
+        strref_trim_front(next_chunk, 1);
+        jnum->state = NUM_STATE_GOT_FRACTION_DIGIT;
+        if (next_chunk->size == 0) {
+            ret = JSON_READY;
+            goto done;
+        }
+        goto at_NUM_STATE_GOT_FRACTION_DIGIT;
+
+at_NUM_STATE_GOT_FRACTION_DIGIT:
+    case NUM_STATE_GOT_FRACTION_DIGIT:
+        {
+            char *cur, *end;
+            assert(next_chunk->size > 0);
+            assert(char_buffer_size(&jnum->buffer) > 0);
+            strref_get_start_and_end(next_chunk, &cur, &end);
+            while (cur < end && IS_DIGIT(*cur))
+                ++cur;
+            if (cur > next_chunk->start) {
+                const size_t len = cur - next_chunk->start;
+                char_buffer_append(&jnum->buffer, next_chunk->start, len);
+                strref_trim_front(next_chunk, len);
+            }
+            ret = JSON_READY;
+            goto done;
+        }
+    }
+
+done:
+    return ret;
+input_error:
+    return JSON_INPUT_ERROR;
 }
 
 enum json_type_t json_number_result(json_number_t *jnum, json_number_t *result)

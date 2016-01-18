@@ -334,6 +334,13 @@ void char_buffer_get(struct char_buffer_t *cb, strref_t *str)
     assert(str->size > 0);
     --str->size;
 }
+
+size_t char_buffer_size(struct char_buffer_t *cb)
+{
+    size_t size = strarray_size(&cb->arr);
+    assert(size > 0);
+    return size - 1;
+}
 #endif
 
 /* strarray_t */

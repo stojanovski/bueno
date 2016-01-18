@@ -51,6 +51,8 @@ typedef struct _json_number_t
     union json_number_union_t number;
     enum json_type_t type;
     struct char_buffer_t buffer;
+    unsigned state;
+    int negative;
 } json_number_t;
 
 void json_number_init(json_number_t *jnum);

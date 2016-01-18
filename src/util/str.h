@@ -120,5 +120,6 @@ void char_buffer_append(struct char_buffer_t *cb, const char *buf, size_t sz);
 void char_buffer_set(struct char_buffer_t *cb, const char *buf, size_t sz);
 void char_buffer_pop_front(struct char_buffer_t *cb, size_t sz);
 void char_buffer_get(struct char_buffer_t *cb, strref_t *str);
+size_t char_buffer_size(struct char_buffer_t *cb);
 
 #endif  /* STR_H */
