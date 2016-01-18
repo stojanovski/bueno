@@ -18,15 +18,18 @@
 #define _JSON_H_
 
 #include "str.h"
+#include "types.h"
 
 enum json_code_t { JSON_READY, JSON_NEED_MORE, JSON_INPUT_ERROR };
 
 typedef struct _json_string_t
 {
     struct char_buffer_t output;
-    /* stores escaping input data */
-    char input_lookback_buf[6];
-    strref_t input_lookback;
+    /* bytes of escaped data read during escaping */
+    size_t escape_seq_len;
+    /* during unicode escaping (\uxxxx) stores the current incarnation of the
+     * final value */
+    uint16_t unicode_escaped_value;
 } json_string_t;
 
 void json_string_init(json_string_t *jstr);

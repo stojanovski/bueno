@@ -554,6 +554,21 @@ static void test_json_higher_value_sequences()
                                  0,
                                  JSON_READY);
         }
+        {
+            /* testing boundary values: same as above, but with hex in caps */
+            uint8_t result_str[] = {0xdf, 0xbf,       /* 2047(0x7ff) */
+                                    0xe0, 0xa0, 0x80, /* 2048(0x800) */
+                                    0xef, 0xbf, 0xbf, /* 65535(0xffff) */
+                                    0x7f,             /* 127(0x7f) */
+                                    0xc2, 0x80,       /* 128(0x80) */
+                                    0x01,             /* 1(0x01) */
+                                    0x00};
+            test_one_json_string("\\u07Ff\\u0800\\ufFFF\\u007F\\u0080\\u0001",
+                                 (char *)result_str,
+                                 bytes_per_parse[i],
+                                 0,
+                                 JSON_READY);
+        }
     }
 }
 

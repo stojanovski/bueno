@@ -1,12 +1,11 @@
 #include "json.h"
-#include "common.h"
 #include <string.h>
 #include <assert.h>
 
 void json_string_init(json_string_t *jstr)
 {
-    jstr->input_lookback.start = jstr->input_lookback_buf;
-    jstr->input_lookback.size = 0;
+    jstr->escape_seq_len = 0;
+    jstr->unicode_escaped_value = 0;
     char_buffer_init(&jstr->output);
 }
 
@@ -45,13 +44,12 @@ static void append_uint16_as_utf8(struct char_buffer_t *output, uint16_t in)
 enum json_code_t json_string_parse(json_string_t *jstr, strref_t *next_chunk)
 {
     struct char_buffer_t *output = &jstr->output;
-    strref_t *input_lookback = &jstr->input_lookback;
     char c;
 
     assert(next_chunk->size > 0);  /* always expect some input */
 
-    if (input_lookback->size > 0) {
-        if (input_lookback->size == 1)
+    if (jstr->escape_seq_len > 0) {
+        if (jstr->escape_seq_len == 1)
             goto escape_seq;
         else
             goto unicode_escape_seq;
@@ -85,13 +83,11 @@ parse:
 
 escape_seq:
     assert(next_chunk->size > 0);
-    assert(input_lookback->size > 0 || next_chunk->start[0] == '\\');
-    if (input_lookback->size == 0) {
-        *input_lookback->start = '\\';
-        input_lookback->size = 1;
+    assert(jstr->escape_seq_len > 0 || next_chunk->start[0] == '\\');
+    if (jstr->escape_seq_len == 0) {
+        jstr->escape_seq_len = 1;
         strref_trim_front(next_chunk, 1);
     }
-    assert(*input_lookback->start == '\\');
 
     if (next_chunk->size == 0)
         return JSON_NEED_MORE;
@@ -115,7 +111,8 @@ escape_seq:
     strref_trim_front(next_chunk, 1);
     /* TODO: make a fast "append char" function */
     char_buffer_append(output, &c, 1);
-    input_lookback->size = 0;
+    jstr->escape_seq_len = 0;
+    jstr->unicode_escaped_value = 0;
 
     if (next_chunk->size > 0)
         goto parse;
@@ -124,50 +121,42 @@ escape_seq:
 
 unicode_escape_seq:
     assert(next_chunk->size > 0);
-    assert(input_lookback->size > 0 && input_lookback->start[0] == '\\');
-    assert(input_lookback->size > 1 || next_chunk->start[0] == 'u');
+    assert(jstr->escape_seq_len > 0);
+    assert(jstr->escape_seq_len > 1 || next_chunk->start[0] == 'u');
 
-    if (input_lookback->size == 1) {
-        ++input_lookback->size;
-        input_lookback->start[1] = 'u';
+    if (jstr->escape_seq_len == 1) {
+        ++jstr->escape_seq_len;
         strref_trim_front(next_chunk, 1);
     }
 
-    assert(input_lookback->size >= 2);
-    assert(input_lookback->start[1] == 'u');
+    assert(jstr->escape_seq_len >= 2);
     /* 6==strlen("\\uxxxx") */
-    while (next_chunk->size > 0 && input_lookback->size < 6) {
+    while (next_chunk->size > 0 && jstr->escape_seq_len < 6) {
+        uint16_t hex_digit_value;
         c = next_chunk->start[0];
         if (c >= 'a' && c <= 'f')
-            input_lookback->start[input_lookback->size++] = c - ('a' - 'A');
-        else if ((c >= 'A' && c <= 'F') || (c >= '0' && c <= '9'))
-            input_lookback->start[input_lookback->size++] = c;
+            hex_digit_value = c - 'a' + 10;
+        else if (c >= 'A' && c <= 'F')
+            hex_digit_value = c - 'A' + 10;
+        else if (c >= '0' && c <= '9')
+            hex_digit_value = c - '0';
         else
             return JSON_INPUT_ERROR;
+
+        jstr->unicode_escaped_value <<= 4;
+        jstr->unicode_escaped_value |= hex_digit_value;
+        ++jstr->escape_seq_len;
         strref_trim_front(next_chunk, 1);
     }
 
-    if (input_lookback->size < 6) {
+    if (jstr->escape_seq_len < 6) {
         assert(next_chunk->size == 0);
         return JSON_NEED_MORE;
     }
     else {
-        uint16_t in2bytes = 0;
-        char *hexptr = input_lookback->start + 2;
-        char *hexend = input_lookback->start + 6;
-        assert(input_lookback->size == 6);
-
-        while (hexptr < hexend) {
-            in2bytes <<= 4;
-            if (*hexptr < 'A')
-                in2bytes |= (uint16_t)(*hexptr - '0');
-            else
-                in2bytes |= (uint16_t)(*hexptr - 'A' + 10);
-            ++hexptr;
-        }
-        input_lookback->size = 0;
-
-        append_uint16_as_utf8(output, in2bytes);
+        append_uint16_as_utf8(output, jstr->unicode_escaped_value);
+        jstr->unicode_escaped_value = 0;
+        jstr->escape_seq_len = 0;
     }
 
     if (next_chunk->size > 0)
