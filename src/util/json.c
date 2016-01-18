@@ -43,14 +43,11 @@ enum json_code_t json_string_parse(json_string_t *jstr, strref_t *next_chunk)
 {
     struct char_buffer_t *output = &jstr->output;
     strref_t *input_lookback = &jstr->input_lookback;
-    char *cur, *end;
     char c;
 
     assert(next_chunk->size > 0);  /* always expect some input */
 
-    strref_get_start_and_end(next_chunk, &cur, &end);
-
-    assert(cur < end);
+    assert(next_chunk->size > 0);
     if (input_lookback->size > 0) {
         if (input_lookback->size == 1)
             goto escape_seq;
@@ -59,35 +56,45 @@ enum json_code_t json_string_parse(json_string_t *jstr, strref_t *next_chunk)
     }
 
 parse:
-    do {
-        if (*cur == '"')
-            goto done;
-        else if (*cur == '\\') {
-            if (cur > next_chunk->start) {
-                const size_t len = cur - next_chunk->start;
-                char_buffer_append(output, next_chunk->start, len);
-                strref_trim_front(next_chunk, len);
+    {
+        char *cur, *end;
+        size_t len;
+        strref_get_start_and_end(next_chunk, &cur, &end);
+        assert(cur < end);
+
+        do {
+            if (*cur == '"')
+                break;
+            else if (*cur == '\\') {
+                if (cur > next_chunk->start) {
+                    const size_t len = cur - next_chunk->start;
+                    char_buffer_append(output, next_chunk->start, len);
+                    strref_trim_front(next_chunk, len);
+                }
+                goto escape_seq;
             }
-            goto escape_seq;
-        }
-    } while (++cur < end);
-    goto done;
+        } while (++cur < end);
+
+        len = cur - next_chunk->start;
+        char_buffer_append(output, next_chunk->start, len);
+        strref_trim_front(next_chunk, len);
+        return JSON_READY;
+    }
 
 escape_seq:
-    assert(cur < end);
-    assert(input_lookback->size > 0 || *cur == '\\');
+    assert(next_chunk->size > 0);
+    assert(input_lookback->size > 0 || next_chunk->start[0] == '\\');
     if (input_lookback->size == 0) {
         *input_lookback->start = '\\';
         input_lookback->size = 1;
-        ++cur;
         strref_trim_front(next_chunk, 1);
     }
     assert(*input_lookback->start == '\\');
 
-    if (cur == end)
+    if (next_chunk->size == 0)
         return JSON_NEED_MORE;
 
-    switch (*cur) {
+    switch (next_chunk->start[0]) {
     case '"':  c = '"';  break;
     case '\\': c = '\\'; break;
     case '/':  c = '/';  break;
@@ -107,39 +114,28 @@ escape_seq:
     /* TODO: make a fast "append char" function */
     char_buffer_append(output, &c, 1);
     input_lookback->size = 0;
-    ++cur;
 
-    if (cur < end)
+    if (next_chunk->size > 0)
         goto parse;
-
-done:
-    {
-        const size_t len = cur - next_chunk->start;
-        char_buffer_append(output, next_chunk->start, len);
-        strref_trim_front(next_chunk, len);
-    }
-
-    return JSON_READY;
+    else
+        return JSON_READY;
 
 unicode_seq:
-    assert(cur < end);
+    assert(next_chunk->size > 0);
     assert(input_lookback->size > 0 && input_lookback->start[0] == '\\');
-    assert(input_lookback->size > 1 || *cur == 'u');
-    assert(cur == next_chunk->start);
+    assert(input_lookback->size > 1 || next_chunk->start[0] == 'u');
 
     if (input_lookback->size == 1) {
-        assert(*cur == 'u');
         ++input_lookback->size;
         input_lookback->start[1] = 'u';
         strref_trim_front(next_chunk, 1);
-        ++cur;
     }
 
     assert(input_lookback->size >= 2);
     assert(input_lookback->start[1] == 'u');
     /* 6==strlen("\\uxxxx") */
-    while (cur < end && input_lookback->size < 6) {
-        c = *cur;
+    while (next_chunk->size > 0 && input_lookback->size < 6) {
+        c = next_chunk->start[0];
         if (c >= 'a' && c <= 'f')
             input_lookback->start[input_lookback->size++] = c - ('a' - 'A');
         else if ((c >= 'A' && c <= 'F') || (c >= '0' && c <= '9'))
@@ -147,11 +143,9 @@ unicode_seq:
         else
             return JSON_INPUT_ERROR;
         strref_trim_front(next_chunk, 1);
-        ++cur;
     }
 
     if (input_lookback->size < 6) {
-        assert(cur == end);
         assert(next_chunk->size == 0);
         return JSON_NEED_MORE;
     }
@@ -174,7 +168,7 @@ unicode_seq:
         append_uint16_as_utf8(output, in2bytes);
     }
 
-    if (cur < end)
+    if (next_chunk->size > 0)
         goto parse;
 
     return JSON_READY;
