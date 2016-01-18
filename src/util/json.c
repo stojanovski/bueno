@@ -56,6 +56,7 @@ enum json_code_t json_string_parse(json_string_t *jstr, strref_t *next_chunk)
     }
 
 parse:
+    /* this section handles the unescaped input */
     {
         char *cur, *end;
         size_t len;
@@ -82,6 +83,7 @@ parse:
     }
 
 escape_seq:
+    /* process escaped input */
     assert(next_chunk->size > 0);
     assert(jstr->escape_seq_len > 0 || next_chunk->start[0] == '\\');
     if (jstr->escape_seq_len == 0) {
@@ -120,6 +122,7 @@ escape_seq:
         return JSON_READY;
 
 unicode_escape_seq:
+    /* process ecaped unicode value (\uxxxx) */
     assert(next_chunk->size > 0);
     assert(jstr->escape_seq_len > 0);
     assert(jstr->escape_seq_len > 1 || next_chunk->start[0] == 'u');
