@@ -166,7 +166,7 @@ unicode_seq:
             if (*hexptr < 'A')
                 in2bytes |= (uint16_t)(*hexptr - '0');
             else
-                in2bytes |= (uint16_t)(*hexptr - 'A');
+                in2bytes |= (uint16_t)(*hexptr - 'A' + 10);
             ++hexptr;
         }
         input_lookback->size = 0;

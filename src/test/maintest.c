@@ -18,6 +18,7 @@
 #include "../util/io.h"
 #include "../util/tree.h"
 #include "../util/json.h"
+#include "../util/common.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -511,6 +512,50 @@ static void test_one_json_string(char *instr,
     strref_uninit(&next_chunk);
 }
 
+static void test_json_higher_value_sequences()
+{
+    static const size_t bytes_per_parse[] = {100, 1, 2, 3, 6};
+    unsigned i;
+
+    for (i = 0; i < ARRAY_SIZE(bytes_per_parse); ++i)
+    {
+        {
+            /* testing 2-byte utf-8 codes */
+            /* DZhe-o-Lj */
+            uint8_t result_str[] = {0xc7, 0x84, (uint8_t)'o', 0xc7, 0x89, 0x00};
+            test_one_json_string("\\u01c4o\\u01c9",
+                                 (char *)result_str,
+                                 bytes_per_parse[i],
+                                 0,
+                                 JSON_READY);
+        }
+        {
+            /* testing 3-byte utf-8 codes */
+            /* 2048,2128 */
+            uint8_t result_str[] = {0xe0, 0xa0, 0x80, 0xe0, 0xa1, 0x90, 0x00};
+            test_one_json_string("\\u0800\\u0850",
+                                 (char *)result_str,
+                                 bytes_per_parse[i],
+                                 0,
+                                 JSON_READY);
+        }
+        {
+            /* testing boundary values */
+            uint8_t result_str[] = {0xdf, 0xbf,       /* 2047(0x7ff) */
+                                    0xe0, 0xa0, 0x80, /* 2048(0x800) */
+                                    0xef, 0xbf, 0xbf, /* 65535(0xffff) */
+                                    0x7f,             /* 127(0x7f) */
+                                    0xc2, 0x80,       /* 128(0x80) */
+                                    0x00};
+            test_one_json_string("\\u07ff\\u0800\\uffff\\u007f\\u0080",
+                                 (char *)result_str,
+                                 bytes_per_parse[i],
+                                 0,
+                                 JSON_READY);
+        }
+    }
+}
+
 static void test_json_unicode_sequences()
 {
     static const size_t bytes_per_parse[] = {100, 1, 2, 3, 6};
@@ -522,15 +567,15 @@ static void test_json_unicode_sequences()
     test_one_json_string("\\u006", "", 100, 0, JSON_NEED_MORE);
     test_one_json_string("\\u0069", "i", 100, 0, JSON_READY);
 
-    for (i = 0;
-         i < sizeof(bytes_per_parse) / sizeof(bytes_per_parse[0]);
-         ++i)
+    for (i = 0; i < ARRAY_SIZE(bytes_per_parse); ++i)
     {
         test_one_json_string("\\u0069", "i", bytes_per_parse[i], 0, JSON_READY);
         test_one_json_string("\\u0049\\u0067", "Ig", bytes_per_parse[i], 0, JSON_READY);
         test_one_json_string("O\\u0049\\u0067", "OIg", bytes_per_parse[i], 0, JSON_READY);
         test_one_json_string("O\\u0049\\u0067\"", "OIg", bytes_per_parse[i], 1, JSON_READY);
     }
+
+    test_json_higher_value_sequences();
 }
 
 static void test_json_string()
@@ -541,9 +586,7 @@ static void test_json_string()
     test_one_json_string("\\", "", 1, 0, JSON_NEED_MORE);
     test_one_json_string("\"", "", 1, 1, JSON_READY);
 
-    for (i = 0;
-         i < sizeof(bytes_per_parse) / sizeof(bytes_per_parse[0]);
-         ++i)
+    for (i = 0; i < ARRAY_SIZE(bytes_per_parse); ++i)
     {
         test_one_json_string("igor", "igor", bytes_per_parse[i], 0, JSON_READY);
         test_one_json_string("ig\\nor", "ig\nor", bytes_per_parse[i], 0, JSON_READY);
