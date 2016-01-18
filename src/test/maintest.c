@@ -621,14 +621,16 @@ static int test_json_string(int argc, char **argv)
 }
 
 static void test_one_json_number(char *instr,
-                                 char *outstr,
+                                 union json_number_union_t *outstr,
                                  size_t max_bytes_per_parse,
                                  size_t unconsumed_chars,
                                  enum json_code_t last_expected_retval)
 {
     json_number_t jnum;
-    strref_t inref = {0}, result = {0}, outref = {0}, next_chunk = {0};
+    strref_t inref = {0}, outref = {0}, next_chunk = {0};
     enum json_code_t retval;
+    enum json_type_t type;
+    union json_number_union_t result;
 
     json_number_init(&jnum);
 
@@ -652,24 +654,43 @@ static void test_one_json_number(char *instr,
 
     ASSERT_NONZERO(retval == last_expected_retval);
 
-    /* json_number_result(&jnum, &result); */
+    type = json_number_result(&jnum, &result);
     json_number_uninit(&jnum);
 
     ASSERT_INT((int)inref.size, (int)unconsumed_chars);
+
     /*
-    ASSERT_NONZERO(strref_are_equal(&result,
-                                    strref_set_static(&outref, outstr)));
+    if (outstr != NULL) {
+        if (type == JSON_INTEGER)
+            ASSERT_NONZERO(result.integer == outstr->integer);
+        else
+            ASSERT_NONZERO(result.floating == outstr->floating);
+    }
     */
 
     strref_uninit(&inref);
-    strref_uninit(&result);
     strref_uninit(&outref);
     strref_uninit(&next_chunk);
 }
 
+static union json_number_union_t *int_value(union json_number_union_t *num,
+                                                size_t val)
+{
+    num->integer = val;
+    return num;
+}
+
+static union json_number_union_t *flo_value(union json_number_union_t *num,
+                                                json_double_t val)
+{
+    num->floating = val;
+    return num;
+}
+
 static int test_json_number(int argc, char **argv)
 {
-    test_one_json_number("0.345", "igor", 100, 0, JSON_READY);
+    union json_number_union_t result;
+    test_one_json_number("0.345", flo_value(&result, 0.345), 100, 0, JSON_READY);
 
     return 0;
 }
