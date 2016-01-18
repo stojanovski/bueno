@@ -21,15 +21,18 @@ static void append_uint16_as_utf8(struct char_buffer_t *output, uint16_t in)
     if (in <= 0x007f) {
         c = (char)in;
         /* TODO: add efficient add char function */
-        char_buffer_append(output, &c, 1);
+        char_buffer_append(output, (char *)&c, 1);
     }
     else if (in <= 0x07ff) {
+        /* codes that require two bytes to store */
         c = ((uint8_t)(in >> 6)) | 0xc0;
         char_buffer_append(output, (char *)&c, 1);
         c = ((uint8_t)(in & 0x003f)) | 0x80;
         char_buffer_append(output, (char *)&c, 1);
     }
     else {
+        assert(in >= 0x0800);
+        /* codes that require three bytes to store */
         c = ((uint8_t)(in >> 12)) | 0xe0;
         char_buffer_append(output, (char *)&c, 1);
         c = ((uint8_t)(in >> 6) & 0x3f) | 0x80;
