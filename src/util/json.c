@@ -193,6 +193,7 @@ void json_number_uninit(json_number_t *jnum)
 #define NUM_STATE_GOT_ZERO 2
 #define NUM_STATE_GOT_SEPARATOR 3
 #define NUM_STATE_GOT_FRACTION_DIGIT 4
+#define NUM_STATE_GOT_NEGATIVE 5
 
 #define IS_NONZERO_DIGIT(c) ((c) >= '1' && (c) <= '9')
 #define IS_DIGIT(c) ((c) >= '0' && (c) <= '9')
@@ -212,6 +213,32 @@ at_NUM_STATE_INIT:
         switch (*next_chunk->start) {
         case '0':
             assert(jnum->type == JSON_INTEGER);
+            strref_trim_front(next_chunk, 1);
+            jnum->state = NUM_STATE_GOT_ZERO;
+            if (next_chunk->size == 0) {
+                ret = JSON_READY;
+                goto done;
+            }
+            goto at_NUM_STATE_GOT_ZERO;
+        case '-':
+            assert(jnum->negative == 0);
+            jnum->negative = 1;
+            strref_trim_front(next_chunk, 1);
+            if (next_chunk->size == 0) {
+                ret = JSON_NEED_MORE;
+                goto done;
+            }
+            goto at_NUM_STATE_GOT_NEGATIVE;
+        default:
+            /* TODO: if (IS_NONZERO_DIGIT(*next_chunk->start)) { */
+            goto input_error;
+        }
+
+at_NUM_STATE_GOT_NEGATIVE:
+    case NUM_STATE_GOT_NEGATIVE:
+        assert(next_chunk->size > 0);
+        switch (*next_chunk->start) {
+        case '0':
             strref_trim_front(next_chunk, 1);
             jnum->state = NUM_STATE_GOT_ZERO;
             if (next_chunk->size == 0) {

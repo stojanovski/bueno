@@ -672,14 +672,14 @@ static void test_one_json_number(char *instr,
 }
 
 static union json_number_union_t *int_value(union json_number_union_t *num,
-                                                size_t val)
+                                            size_t val)
 {
     num->integer = val;
     return num;
 }
 
 static union json_number_union_t *flo_value(union json_number_union_t *num,
-                                                json_double_t val)
+                                            json_double_t val)
 {
     num->floating = val;
     return num;
@@ -690,6 +690,7 @@ static int test_json_number(int argc, char **argv)
     union json_number_union_t result;
     test_one_json_number("0.345", flo_value(&result, 0.345), 100, 0, JSON_READY);
     test_one_json_number("0", int_value(&result, 0), 100, 0, JSON_READY);
+    test_one_json_number("-0.345", flo_value(&result, -0.345), 100, 0, JSON_READY);
 
     return 0;
 }
