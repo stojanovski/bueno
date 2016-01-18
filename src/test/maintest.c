@@ -533,6 +533,7 @@ static test_json_string()
         test_one_json_string("igor\\", "igor", bytes_per_parse[i], 0, JSON_NEED_MORE);
         test_one_json_string("\n\"", "\n", bytes_per_parse[i], 1, JSON_READY);
         test_one_json_string("\"X", "", bytes_per_parse[i], 2, JSON_READY);
+        test_one_json_string("\\n\\n", "\n\n", bytes_per_parse[i], 0, JSON_READY);
 
         /* unsupported escape char */
         test_one_json_string("\\q", "", bytes_per_parse[i], 1, JSON_INPUT_ERROR);
