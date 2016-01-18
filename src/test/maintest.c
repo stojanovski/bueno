@@ -620,17 +620,58 @@ static int test_json_string(int argc, char **argv)
     return 0;
 }
 
-static int test_json_number(int argc, char **argv)
+static void test_one_json_number(char *instr,
+                                 char *outstr,
+                                 size_t max_bytes_per_parse,
+                                 size_t unconsumed_chars,
+                                 enum json_code_t last_expected_retval)
 {
     json_number_t jnum;
-    enum json_code_t ret;
-    strref_t inref = {0};
+    strref_t inref = {0}, result = {0}, outref = {0}, next_chunk = {0};
+    enum json_code_t retval;
 
     json_number_init(&jnum);
-    ret = json_number_parse(&jnum, strref_set_static(&inref, "0.567 "));
+
+    strref_set_static(&inref, instr);
+    assert(inref.size > 0);
+
+    while (1) {
+        size_t orig_chunk_size;
+        strref_assign(&next_chunk, &inref);
+        if (next_chunk.size > max_bytes_per_parse)
+            next_chunk.size = max_bytes_per_parse;
+        orig_chunk_size = next_chunk.size;
+
+        retval = json_number_parse(&jnum, &next_chunk);
+        strref_trim_front(&inref, orig_chunk_size - next_chunk.size);
+        if (next_chunk.size > 0)
+            break;  /* ran into double-quotes: done */
+        else if (inref.size == 0)
+            break; /* exhausted the input */
+    }
+
+    ASSERT_NONZERO(retval == last_expected_retval);
+
+    /* json_number_result(&jnum, &result); */
     json_number_uninit(&jnum);
+
+    ASSERT_INT((int)inref.size, (int)unconsumed_chars);
+    /*
+    ASSERT_NONZERO(strref_are_equal(&result,
+                                    strref_set_static(&outref, outstr)));
+    */
+
     strref_uninit(&inref);
-    /* ret = json_number_result(json_number_t *jnum, json_number_t *result); */
+    strref_uninit(&result);
+    strref_uninit(&outref);
+    strref_uninit(&next_chunk);
+}
+
+static int test_json_number(int argc, char **argv)
+{
+    test_one_json_number("0.345", "igor", 100, 0, JSON_READY);
+
+    return 0;
 }
 
 /****************************************************************************/
@@ -646,7 +687,7 @@ static struct {
     {"test_json_string", test_json_string, 0, ""},
     {"test_json_number", test_json_number, 0, ""},
 };
-static const unsigned argopts_size = sizeof(argopts) / sizeof(argopts[0]);
+static const unsigned argopts_size = ARRAY_SIZE(argopts);
 
 static void usage(char *argv0)
 {
