@@ -172,3 +172,27 @@ void json_string_result(json_string_t *jstr, strref_t *result)
 {
     char_buffer_get(&jstr->output, result);
 }
+
+
+void json_number_init(json_number_t *jnum)
+{
+    jnum->number.integer = 0;
+    jnum->type = JSON_INTEGER;
+    char_buffer_init(&jnum->buffer);
+}
+
+void json_number_uninit(json_number_t *jnum)
+{
+    char_buffer_uninit(&jnum->buffer);
+}
+
+enum json_code_t json_number_parse(json_number_t *jnum, strref_t *next_chunk)
+{
+    return JSON_READY;
+}
+
+enum json_type_t json_number_result(json_number_t *jnum, json_number_t *result)
+{
+    memcpy(result, &jnum->number, sizeof(json_number_t));
+    return jnum->type;
+}

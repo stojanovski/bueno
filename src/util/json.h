@@ -37,4 +37,25 @@ void json_string_uninit(json_string_t *jstr);
 enum json_code_t json_string_parse(json_string_t *jstr, strref_t *next_chunk);
 void json_string_result(json_string_t *jstr, strref_t *result);
 
+typedef double json_double_t;
+
+union json_number_union_t {
+    json_double_t floating;
+    ssize_t integer;
+};
+
+enum json_type_t { JSON_INTEGER, JSON_FLOATING };
+
+typedef struct _json_number_t
+{
+    union json_number_union_t number;
+    enum json_type_t type;
+    struct char_buffer_t buffer;
+} json_number_t;
+
+void json_number_init(json_number_t *jnum);
+void json_number_uninit(json_number_t *jnum);
+enum json_code_t json_number_parse(json_number_t *jnum, strref_t *next_chunk);
+enum json_type_t json_number_result(json_number_t *jnum, json_number_t *result);
+
 #endif  /* _JSON_H_ */

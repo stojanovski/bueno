@@ -25,12 +25,6 @@
 #include <string.h>
 #include <time.h>
 
-#ifdef WIN32
-#include <windows.h>
-
-typedef SSIZE_T ssize_t;
-#endif
-
 static int test_line_reader_old(int argc, char **argv)
 {
     struct strrdr_t fr, lr;
