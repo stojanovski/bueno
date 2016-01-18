@@ -659,14 +659,12 @@ static void test_one_json_number(char *instr,
 
     ASSERT_INT((int)inref.size, (int)unconsumed_chars);
 
-    /*
     if (outstr != NULL) {
         if (type == JSON_INTEGER)
             ASSERT_NONZERO(result.integer == outstr->integer);
         else
             ASSERT_NONZERO(result.floating == outstr->floating);
     }
-    */
 
     strref_uninit(&inref);
     strref_uninit(&outref);
@@ -691,6 +689,7 @@ static int test_json_number(int argc, char **argv)
 {
     union json_number_union_t result;
     test_one_json_number("0.345", flo_value(&result, 0.345), 100, 0, JSON_READY);
+    test_one_json_number("0", int_value(&result, 0), 100, 0, JSON_READY);
 
     return 0;
 }

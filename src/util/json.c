@@ -291,6 +291,14 @@ input_error:
 enum json_type_t json_number_result(json_number_t *jnum,
                                     union json_number_union_t *result)
 {
-    memcpy(result, &jnum->number, sizeof(union json_number_union_t));
+    if (jnum->type == JSON_INTEGER)
+        result->integer = jnum->number.integer;
+    else {
+        strref_t ref = {0};
+        assert(jnum->type == JSON_FLOATING);
+        char_buffer_get(&jnum->buffer, &ref);
+        result->floating = atof(ref.start);
+    }
+
     return jnum->type;
 }
