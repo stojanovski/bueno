@@ -546,8 +546,9 @@ static void test_json_higher_value_sequences()
                                     0xef, 0xbf, 0xbf, /* 65535(0xffff) */
                                     0x7f,             /* 127(0x7f) */
                                     0xc2, 0x80,       /* 128(0x80) */
+                                    0x01,             /* 1(0x01) */
                                     0x00};
-            test_one_json_string("\\u07ff\\u0800\\uffff\\u007f\\u0080",
+            test_one_json_string("\\u07ff\\u0800\\uffff\\u007f\\u0080\\u0001",
                                  (char *)result_str,
                                  bytes_per_parse[i],
                                  0,

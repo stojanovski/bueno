@@ -47,12 +47,11 @@ enum json_code_t json_string_parse(json_string_t *jstr, strref_t *next_chunk)
 
     assert(next_chunk->size > 0);  /* always expect some input */
 
-    assert(next_chunk->size > 0);
     if (input_lookback->size > 0) {
         if (input_lookback->size == 1)
             goto escape_seq;
         else
-            goto unicode_seq;
+            goto unicode_escape_seq;
     }
 
 parse:
@@ -104,7 +103,7 @@ escape_seq:
     case 'r':  c = '\r'; break;
     case 't':  c = '\t'; break;
     case 'u':  /* unicode \uxxxx sequence */
-        goto unicode_seq;
+        goto unicode_escape_seq;
     default:
         /* unsupported escape sequence */
         return JSON_INPUT_ERROR;
@@ -120,7 +119,7 @@ escape_seq:
     else
         return JSON_READY;
 
-unicode_seq:
+unicode_escape_seq:
     assert(next_chunk->size > 0);
     assert(input_lookback->size > 0 && input_lookback->start[0] == '\\');
     assert(input_lookback->size > 1 || next_chunk->start[0] == 'u');
