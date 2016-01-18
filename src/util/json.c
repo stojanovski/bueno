@@ -254,6 +254,7 @@ at_NUM_STATE_GOT_SEPARATOR:
         assert(next_chunk->size > 0);
         if (!IS_DIGIT(*next_chunk->start))
             goto input_error;
+        char_buffer_append(&jnum->buffer, next_chunk->start, 1);
         strref_trim_front(next_chunk, 1);
         jnum->state = NUM_STATE_GOT_FRACTION_DIGIT;
         if (next_chunk->size == 0) {
@@ -287,8 +288,9 @@ input_error:
     return JSON_INPUT_ERROR;
 }
 
-enum json_type_t json_number_result(json_number_t *jnum, json_number_t *result)
+enum json_type_t json_number_result(json_number_t *jnum,
+                                    union json_number_union_t *result)
 {
-    memcpy(result, &jnum->number, sizeof(json_number_t));
+    memcpy(result, &jnum->number, sizeof(union json_number_union_t));
     return jnum->type;
 }

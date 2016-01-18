@@ -588,7 +588,7 @@ static void test_json_unicode_sequences()
     test_json_higher_value_sequences();
 }
 
-static void test_json_string()
+static int test_json_string(int argc, char **argv)
 {
     static const size_t bytes_per_parse[] = {100, 1, 2, 3};
     unsigned i;
@@ -616,12 +616,21 @@ static void test_json_string()
     }
 
     test_json_unicode_sequences();
+
+    return 0;
 }
 
-static int test_json(int argc, char **argv)
+static int test_json_number(int argc, char **argv)
 {
-    test_json_string();
-    return 0;
+    json_number_t jnum;
+    enum json_code_t ret;
+    strref_t inref = {0};
+
+    json_number_init(&jnum);
+    ret = json_number_parse(&jnum, strref_set_static(&inref, "0.567 "));
+    json_number_uninit(&jnum);
+    strref_uninit(&inref);
+    /* ret = json_number_result(json_number_t *jnum, json_number_t *result); */
 }
 
 /****************************************************************************/
@@ -634,7 +643,8 @@ static struct {
 } argopts[] = {
     {"test_line_reader", test_line_reader, 0, ""},
     {"test_bintree", test_bintree, 0, ""},
-    {"test_json", test_json, 0, ""},
+    {"test_json_string", test_json_string, 0, ""},
+    {"test_json_number", test_json_number, 0, ""},
 };
 static const unsigned argopts_size = sizeof(argopts) / sizeof(argopts[0]);
 

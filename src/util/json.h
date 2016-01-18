@@ -58,6 +58,7 @@ typedef struct _json_number_t
 void json_number_init(json_number_t *jnum);
 void json_number_uninit(json_number_t *jnum);
 enum json_code_t json_number_parse(json_number_t *jnum, strref_t *next_chunk);
-enum json_type_t json_number_result(json_number_t *jnum, json_number_t *result);
+enum json_type_t json_number_result(json_number_t *jnum,
+                                    union json_number_union_t *result);
 
 #endif  /* _JSON_H_ */
