@@ -132,12 +132,13 @@ unicode_seq:
         ++input_lookback->size;
         input_lookback->start[1] = 'u';
         strref_trim_front(next_chunk, 1);
+        ++cur;
     }
 
     assert(input_lookback->size >= 2);
     assert(input_lookback->start[1] == 'u');
     /* 6==strlen("\\uxxxx") */
-    while (++cur < end && input_lookback->size < 6) {
+    while (cur < end && input_lookback->size < 6) {
         c = *cur;
         if (c >= 'a' && c <= 'f')
             input_lookback->start[input_lookback->size++] = c - ('a' - 'A');
@@ -145,11 +146,12 @@ unicode_seq:
             input_lookback->start[input_lookback->size++] = c;
         else
             return JSON_INPUT_ERROR;
+        strref_trim_front(next_chunk, 1);
+        ++cur;
     }
 
     if (input_lookback->size < 6) {
         assert(cur == end);
-        strref_trim_front(next_chunk, cur - next_chunk->start);
         assert(next_chunk->size == 0);
         return JSON_NEED_MORE;
     }

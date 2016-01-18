@@ -511,7 +511,29 @@ static void test_one_json_string(char *instr,
     strref_uninit(&next_chunk);
 }
 
-static test_json_string()
+static void test_json_unicode_sequences()
+{
+    static const size_t bytes_per_parse[] = {100, 1, 2, 3, 6};
+    unsigned i;
+
+    test_one_json_string("\\u", "", 100, 0, JSON_NEED_MORE);
+    test_one_json_string("\\u0", "", 100, 0, JSON_NEED_MORE);
+    test_one_json_string("\\u00", "", 100, 0, JSON_NEED_MORE);
+    test_one_json_string("\\u006", "", 100, 0, JSON_NEED_MORE);
+    test_one_json_string("\\u0069", "i", 100, 0, JSON_READY);
+
+    for (i = 0;
+         i < sizeof(bytes_per_parse) / sizeof(bytes_per_parse[0]);
+         ++i)
+    {
+        test_one_json_string("\\u0069", "i", bytes_per_parse[i], 0, JSON_READY);
+        test_one_json_string("\\u0049\\u0067", "Ig", bytes_per_parse[i], 0, JSON_READY);
+        test_one_json_string("O\\u0049\\u0067", "OIg", bytes_per_parse[i], 0, JSON_READY);
+        test_one_json_string("O\\u0049\\u0067\"", "OIg", bytes_per_parse[i], 1, JSON_READY);
+    }
+}
+
+static void test_json_string()
 {
     static const size_t bytes_per_parse[] = {100, 1, 2, 3};
     unsigned i;
@@ -539,6 +561,8 @@ static test_json_string()
         test_one_json_string("\\q", "", bytes_per_parse[i], 1, JSON_INPUT_ERROR);
         test_one_json_string("a\\q", "a", bytes_per_parse[i], 1, JSON_INPUT_ERROR);
     }
+
+    test_json_unicode_sequences();
 }
 
 static int test_json(int argc, char **argv)

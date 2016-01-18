@@ -7,4 +7,3 @@ typedef unsigned __int8 uint8_t;
 #endif
 
 #endif /* __COMMON___H____ */
-
