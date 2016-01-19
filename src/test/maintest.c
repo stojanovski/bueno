@@ -693,34 +693,39 @@ do { \
 } while (0)
 #define TEST_JSON_INT(val, last_status) \
 do { \
-    test_one_json_number(#val, int_value(&result, val), 100, 0, last_status); \
+    test_one_json_number(#val, int_value(&result, val), bytes_per_parse[i], 0, last_status); \
 } while (0)
     union json_number_union_t result;
+    static const size_t bytes_per_parse[] = {100, 1, 2, 3, 6};
+    unsigned i;
     (void)argc; (void)argv;
 
-    TEST_JSON_INT(0, JSON_READY);
+    test_one_json_number("0", int_value(&result, 0), 1, 0, JSON_READY);
 
-    test_one_json_number("0.", NULL, 100, 0, JSON_NEED_MORE);
-    test_one_json_number("0x", int_value(&result, 0), 100, 1, JSON_READY);
-    TEST_JSON_FLO(0.3, JSON_READY);
-    TEST_JSON_FLO(0.34, JSON_READY);
-    TEST_JSON_FLO(0.345, JSON_READY);
-    test_one_json_number("0.345  ", flo_value(&result, 0.345), 100, 2, JSON_READY);
-    test_one_json_number(".", NULL, 100, 1, JSON_INPUT_ERROR);
-    test_one_json_number("x", NULL, 100, 1, JSON_INPUT_ERROR);
-    test_one_json_number("0. ", NULL, 100, 1, JSON_INPUT_ERROR);
+    for (i = 0; i < ARRAY_SIZE(bytes_per_parse); ++i)
+    {
+        test_one_json_number("0.", NULL, bytes_per_parse[i], 0, JSON_NEED_MORE);
+        test_one_json_number("0x", int_value(&result, 0), bytes_per_parse[i], 1, JSON_READY);
+        TEST_JSON_FLO(0.3, JSON_READY);
+        TEST_JSON_FLO(0.34, JSON_READY);
+        TEST_JSON_FLO(0.345, JSON_READY);
+        test_one_json_number("0.345  ", flo_value(&result, 0.345), bytes_per_parse[i], 2, JSON_READY);
+        test_one_json_number(".", NULL, bytes_per_parse[i], 1, JSON_INPUT_ERROR);
+        test_one_json_number("x", NULL, bytes_per_parse[i], 1, JSON_INPUT_ERROR);
+        test_one_json_number("0. ", NULL, bytes_per_parse[i], 1, JSON_INPUT_ERROR);
 
-    test_one_json_number("-", NULL, 100, 0, JSON_NEED_MORE);
-    test_one_json_number("-0", int_value(&result, 0), 100, 0, JSON_READY);
-    test_one_json_number("-0-", int_value(&result, 0), 100, 1, JSON_READY);
+        test_one_json_number("-", NULL, bytes_per_parse[i], 0, JSON_NEED_MORE);
+        test_one_json_number("-0", int_value(&result, 0), bytes_per_parse[i], 0, JSON_READY);
+        test_one_json_number("-0-", int_value(&result, 0), bytes_per_parse[i], 1, JSON_READY);
 
-    test_one_json_number("-0.", NULL, 100, 0, JSON_NEED_MORE);
-    TEST_JSON_FLO(-0.3, JSON_READY);
-    TEST_JSON_FLO(-0.34, JSON_READY);
-    TEST_JSON_FLO(-0.345, JSON_READY);
-    test_one_json_number("-0.345 ", flo_value(&result, -0.345), 100, 1, JSON_READY);
-    test_one_json_number("-X", NULL, 100, 1, JSON_INPUT_ERROR);
-    test_one_json_number("-0. ", NULL, 100, 1, JSON_INPUT_ERROR);
+        test_one_json_number("-0.", NULL, bytes_per_parse[i], 0, JSON_NEED_MORE);
+        TEST_JSON_FLO(-0.3, JSON_READY);
+        TEST_JSON_FLO(-0.34, JSON_READY);
+        TEST_JSON_FLO(-0.345, JSON_READY);
+        test_one_json_number("-0.345 ", flo_value(&result, -0.345), bytes_per_parse[i], 1, JSON_READY);
+        test_one_json_number("-X", NULL, bytes_per_parse[i], 1, JSON_INPUT_ERROR);
+        test_one_json_number("-0. ", NULL, bytes_per_parse[i], 1, JSON_INPUT_ERROR);
+    }
 
     return 0;
 #undef TEST_JSON_INT
