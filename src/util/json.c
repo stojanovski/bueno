@@ -194,6 +194,7 @@ void json_number_uninit(json_number_t *jnum)
 #define NUM_STATE_GOT_SEPARATOR 3
 #define NUM_STATE_GOT_FRACTION_DIGIT 4
 #define NUM_STATE_GOT_NEGATIVE 5
+#define NUM_STATE_GOT_NONZERO 6
 
 #define IS_NONZERO_DIGIT(c) ((c) >= '1' && (c) <= '9')
 #define IS_DIGIT(c) ((c) >= '0' && (c) <= '9')
@@ -224,13 +225,24 @@ at_NUM_STATE_INIT:
             assert(jnum->negative == 0);
             jnum->negative = 1;
             strref_trim_front(next_chunk, 1);
+            jnum->state = NUM_STATE_GOT_NEGATIVE;
             if (next_chunk->size == 0) {
                 ret = JSON_NEED_MORE;
                 goto done;
             }
             goto at_NUM_STATE_GOT_NEGATIVE;
         default:
-            /* TODO: if (IS_NONZERO_DIGIT(*next_chunk->start)) { */
+            if (IS_NONZERO_DIGIT(*next_chunk->start)) {
+                assert(jnum->type == JSON_INTEGER);
+                jnum->number.integer = (json_int_t)(*next_chunk->start - '0');
+                strref_trim_front(next_chunk, 1);
+                jnum->state = NUM_STATE_GOT_NONZERO;
+                if (next_chunk->size == 0) {
+                    ret = JSON_READY;
+                    goto done;
+                }
+                goto at_NUM_STATE_GOT_NONZERO;
+            }
             goto input_error;
         }
 
@@ -247,8 +259,40 @@ at_NUM_STATE_GOT_NEGATIVE:
             }
             goto at_NUM_STATE_GOT_ZERO;
         default:
-            /* TODO: if (IS_NONZERO_DIGIT(*next_chunk->start)) { */
+            if (IS_NONZERO_DIGIT(*next_chunk->start)) {
+                assert(jnum->type == JSON_INTEGER);
+                jnum->number.integer *= 10;  /* TODO: handle overflow */
+                jnum->number.integer = (json_int_t)(*next_chunk->start - '0');
+                strref_trim_front(next_chunk, 1);
+                jnum->state = NUM_STATE_GOT_NONZERO;
+                if (next_chunk->size == 0) {
+                    ret = JSON_READY;
+                    goto done;
+                }
+                goto at_NUM_STATE_GOT_NONZERO;
+            }
             goto input_error;
+        }
+
+at_NUM_STATE_GOT_NONZERO:
+    case NUM_STATE_GOT_NONZERO:
+        {
+            char *cur, *end;
+            assert(next_chunk->size > 0);
+            assert(jnum->type == JSON_INTEGER);
+            strref_get_start_and_end(next_chunk, &cur, &end);
+            while (cur < end && IS_DIGIT(*cur)) {
+                /* TODO: handle overflow */
+                jnum->number.integer *= 10;
+                jnum->number.integer += (json_int_t)(*cur - '0');
+                ++cur;
+            }
+            if (cur > next_chunk->start) {
+                const size_t len = cur - next_chunk->start;
+                strref_trim_front(next_chunk, len);
+            }
+            ret = JSON_READY;
+            goto done;
         }
 
 at_NUM_STATE_GOT_ZERO:
@@ -318,8 +362,10 @@ input_error:
 enum json_type_t json_number_result(json_number_t *jnum,
                                     union json_number_union_t *result)
 {
-    if (jnum->type == JSON_INTEGER)
-        result->integer = jnum->number.integer;
+    if (jnum->type == JSON_INTEGER) {
+        result->integer = jnum->negative ? -jnum->number.integer :
+                                           jnum->number.integer;
+    }
     else {
         strref_t ref = {0};
         assert(jnum->type == JSON_FLOATING);

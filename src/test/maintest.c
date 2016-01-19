@@ -725,6 +725,13 @@ do { \
         test_one_json_number("-0.345 ", flo_value(&result, -0.345), bytes_per_parse[i], 1, JSON_READY);
         test_one_json_number("-X", NULL, bytes_per_parse[i], 1, JSON_INPUT_ERROR);
         test_one_json_number("-0. ", NULL, bytes_per_parse[i], 1, JSON_INPUT_ERROR);
+
+        TEST_JSON_INT(-1, JSON_READY);
+        test_one_json_number("-1234 ", int_value(&result, -1234), bytes_per_parse[i], 1, JSON_READY);
+
+        TEST_JSON_INT(1, JSON_READY);
+        test_one_json_number("1 ", int_value(&result, 1), bytes_per_parse[i], 1, JSON_READY);
+        test_one_json_number("1234 ", int_value(&result, 1234), bytes_per_parse[i], 1, JSON_READY);
     }
 
     return 0;
