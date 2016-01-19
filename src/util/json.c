@@ -325,6 +325,7 @@ enum json_type_t json_number_result(json_number_t *jnum,
         assert(jnum->type == JSON_FLOATING);
         char_buffer_get(&jnum->buffer, &ref);
         result->floating = atof(ref.start);
+        strref_uninit(&ref);
     }
 
     return jnum->type;

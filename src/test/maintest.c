@@ -687,12 +687,44 @@ static union json_number_union_t *flo_value(union json_number_union_t *num,
 
 static int test_json_number(int argc, char **argv)
 {
+#define TEST_JSON_FLO(val, last_status) \
+do { \
+    test_one_json_number(#val, flo_value(&result, val), 100, 0, last_status); \
+} while (0)
+#define TEST_JSON_INT(val, last_status) \
+do { \
+    test_one_json_number(#val, int_value(&result, val), 100, 0, last_status); \
+} while (0)
     union json_number_union_t result;
-    test_one_json_number("0.345", flo_value(&result, 0.345), 100, 0, JSON_READY);
-    test_one_json_number("0", int_value(&result, 0), 100, 0, JSON_READY);
-    test_one_json_number("-0.345", flo_value(&result, -0.345), 100, 0, JSON_READY);
+    (void)argc; (void)argv;
+
+    TEST_JSON_INT(0, JSON_READY);
+
+    test_one_json_number("0.", NULL, 100, 0, JSON_NEED_MORE);
+    test_one_json_number("0x", int_value(&result, 0), 100, 1, JSON_READY);
+    TEST_JSON_FLO(0.3, JSON_READY);
+    TEST_JSON_FLO(0.34, JSON_READY);
+    TEST_JSON_FLO(0.345, JSON_READY);
+    test_one_json_number("0.345  ", flo_value(&result, 0.345), 100, 2, JSON_READY);
+    test_one_json_number(".", NULL, 100, 1, JSON_INPUT_ERROR);
+    test_one_json_number("x", NULL, 100, 1, JSON_INPUT_ERROR);
+    test_one_json_number("0. ", NULL, 100, 1, JSON_INPUT_ERROR);
+
+    test_one_json_number("-", NULL, 100, 0, JSON_NEED_MORE);
+    test_one_json_number("-0", int_value(&result, 0), 100, 0, JSON_READY);
+    test_one_json_number("-0-", int_value(&result, 0), 100, 1, JSON_READY);
+
+    test_one_json_number("-0.", NULL, 100, 0, JSON_NEED_MORE);
+    TEST_JSON_FLO(-0.3, JSON_READY);
+    TEST_JSON_FLO(-0.34, JSON_READY);
+    TEST_JSON_FLO(-0.345, JSON_READY);
+    test_one_json_number("-0.345 ", flo_value(&result, -0.345), 100, 1, JSON_READY);
+    test_one_json_number("-X", NULL, 100, 1, JSON_INPUT_ERROR);
+    test_one_json_number("-0. ", NULL, 100, 1, JSON_INPUT_ERROR);
 
     return 0;
+#undef TEST_JSON_INT
+#undef TEST_JSON_FLO
 }
 
 /****************************************************************************/
