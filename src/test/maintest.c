@@ -732,6 +732,12 @@ do { \
         TEST_JSON_INT(1, JSON_READY);
         test_one_json_number("1 ", int_value(&result, 1), bytes_per_parse[i], 1, JSON_READY);
         test_one_json_number("1234 ", int_value(&result, 1234), bytes_per_parse[i], 1, JSON_READY);
+
+        test_one_json_number("1.", NULL, bytes_per_parse[i], 0, JSON_NEED_MORE);
+        test_one_json_number("1234.", NULL, bytes_per_parse[i], 0, JSON_NEED_MORE);
+        TEST_JSON_FLO(1.1, JSON_READY);
+        TEST_JSON_FLO(1234.1, JSON_READY);
+        test_one_json_number("1234. ", NULL, bytes_per_parse[i], 1, JSON_INPUT_ERROR);
     }
 
     return 0;

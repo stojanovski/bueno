@@ -1,6 +1,7 @@
 #include "json.h"
 #include <string.h>
 #include <assert.h>
+#include <stdio.h>
 
 void json_string_init(json_string_t *jstr)
 {
@@ -188,6 +189,16 @@ void json_number_uninit(json_number_t *jnum)
     char_buffer_uninit(&jnum->buffer);
 }
 
+static void append_integer_to_char_buffer(const json_int_t in, 
+                                          struct char_buffer_t *cb)
+{
+    char buf[100];
+    int ret = sprintf_s(buf, sizeof(buf), "%lld", (long long)in);
+    assert(ret != -1);
+    /* TODO: avoid extra copy here */
+    char_buffer_append(cb, buf, strlen(buf));
+}
+
 #define NUM_STATE_INIT 0
 #define NUM_STATE_GOT_MINUS 1
 #define NUM_STATE_GOT_ZERO 2
@@ -291,6 +302,31 @@ at_NUM_STATE_GOT_NONZERO:
                 const size_t len = cur - next_chunk->start;
                 strref_trim_front(next_chunk, len);
             }
+            if (next_chunk->size == 0) {
+                ret = JSON_READY;
+                goto done;
+            }
+            else if (*next_chunk->start == '.') {
+                /* convert integer to string, so that later it can be converted
+                 * into a floating point number */
+                assert(jnum->type == JSON_INTEGER);
+                jnum->type = JSON_FLOATING;
+                assert(char_buffer_size(&jnum->buffer) == 0);
+                if (jnum->negative)
+                    char_buffer_append(&jnum->buffer, "-", 1);
+                append_integer_to_char_buffer(
+                    jnum->negative ? -jnum->number.integer :
+                                     jnum->number.integer,
+                    &jnum->buffer);
+                char_buffer_append(&jnum->buffer, ".", 1);
+                strref_trim_front(next_chunk, 1);
+                jnum->state = NUM_STATE_GOT_SEPARATOR;
+                if (next_chunk->size == 0) {
+                    ret = JSON_NEED_MORE;
+                    goto done;
+                }
+                goto at_NUM_STATE_GOT_SEPARATOR;
+            }
             ret = JSON_READY;
             goto done;
         }
@@ -300,13 +336,18 @@ at_NUM_STATE_GOT_ZERO:
         assert(jnum->number.integer == 0);
         switch (*next_chunk->start) {
         case '.':
+            /* convert integer to string, so that later it can be converted
+             * into a floating point number */
             assert(jnum->type == JSON_INTEGER);
             jnum->type = JSON_FLOATING;
             assert(char_buffer_size(&jnum->buffer) == 0);
             if (jnum->negative)
-                char_buffer_append(&jnum->buffer, "-0.", sizeof("-0.") - 1);
-            else
-                char_buffer_append(&jnum->buffer, "0.", sizeof("0.") - 1);
+                char_buffer_append(&jnum->buffer, "-", 1);
+            append_integer_to_char_buffer(
+                jnum->negative ? -jnum->number.integer :
+                                 jnum->number.integer,
+                &jnum->buffer);
+            char_buffer_append(&jnum->buffer, ".", 1);
             strref_trim_front(next_chunk, 1);
             jnum->state = NUM_STATE_GOT_SEPARATOR;
             if (next_chunk->size == 0) {
