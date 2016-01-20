@@ -739,6 +739,14 @@ do { \
         TEST_JSON_FLO(1.1, JSON_READY);
         TEST_JSON_FLO(1234.1, JSON_READY);
         test_one_json_number("1234. ", NULL, BPP, 1, JSON_INPUT_ERROR);
+
+        test_one_json_number("-1.", NULL, BPP, 0, JSON_NEED_MORE);
+        test_one_json_number("-12345.", NULL, BPP, 0, JSON_NEED_MORE);
+        TEST_JSON_FLO(-1.1, JSON_READY);
+        TEST_JSON_FLO(-12345.6789, JSON_READY);
+        TEST_JSON_FLO(-12345.678900, JSON_READY);
+        test_one_json_number("-12. ", NULL, BPP, 1, JSON_INPUT_ERROR);
+        test_one_json_number("-1234567. ", NULL, BPP, 1, JSON_INPUT_ERROR);
     }
 
     return 0;

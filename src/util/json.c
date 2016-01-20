@@ -315,8 +315,7 @@ at_NUM_STATE_GOT_NONZERO:
                 if (jnum->negative)
                     char_buffer_append(&jnum->buffer, "-", 1);
                 append_integer_to_char_buffer(
-                    jnum->negative ? -jnum->number.integer :
-                                     jnum->number.integer,
+                    jnum->number.integer,
                     &jnum->buffer);
                 char_buffer_append(&jnum->buffer, ".", 1);
                 strref_trim_front(next_chunk, 1);
@@ -344,8 +343,7 @@ at_NUM_STATE_GOT_ZERO:
             if (jnum->negative)
                 char_buffer_append(&jnum->buffer, "-", 1);
             append_integer_to_char_buffer(
-                jnum->negative ? -jnum->number.integer :
-                                 jnum->number.integer,
+                jnum->number.integer,
                 &jnum->buffer);
             char_buffer_append(&jnum->buffer, ".", 1);
             strref_trim_front(next_chunk, 1);
