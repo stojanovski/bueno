@@ -695,6 +695,7 @@ do { \
 do { \
     test_one_json_number(#val, int_value(&result, val), bytes_per_parse[i], 0, last_status); \
 } while (0)
+#define BPP bytes_per_parse[i]
     union json_number_union_t result;
     static const size_t bytes_per_parse[] = {100, 1, 2, 3, 6};
     unsigned i;
@@ -704,45 +705,46 @@ do { \
 
     for (i = 0; i < ARRAY_SIZE(bytes_per_parse); ++i)
     {
-        test_one_json_number("0.", NULL, bytes_per_parse[i], 0, JSON_NEED_MORE);
-        test_one_json_number("0x", int_value(&result, 0), bytes_per_parse[i], 1, JSON_READY);
+        test_one_json_number("0.", NULL, BPP, 0, JSON_NEED_MORE);
+        test_one_json_number("0x", int_value(&result, 0), BPP, 1, JSON_READY);
         TEST_JSON_FLO(0.3, JSON_READY);
         TEST_JSON_FLO(0.34, JSON_READY);
         TEST_JSON_FLO(0.345, JSON_READY);
-        test_one_json_number("0.345  ", flo_value(&result, 0.345), bytes_per_parse[i], 2, JSON_READY);
-        test_one_json_number(".", NULL, bytes_per_parse[i], 1, JSON_INPUT_ERROR);
-        test_one_json_number("x", NULL, bytes_per_parse[i], 1, JSON_INPUT_ERROR);
-        test_one_json_number("0. ", NULL, bytes_per_parse[i], 1, JSON_INPUT_ERROR);
+        test_one_json_number("0.345  ", flo_value(&result, 0.345), BPP, 2, JSON_READY);
+        test_one_json_number(".", NULL, BPP, 1, JSON_INPUT_ERROR);
+        test_one_json_number("x", NULL, BPP, 1, JSON_INPUT_ERROR);
+        test_one_json_number("0. ", NULL, BPP, 1, JSON_INPUT_ERROR);
 
-        test_one_json_number("-", NULL, bytes_per_parse[i], 0, JSON_NEED_MORE);
-        test_one_json_number("-0", int_value(&result, 0), bytes_per_parse[i], 0, JSON_READY);
-        test_one_json_number("-0-", int_value(&result, 0), bytes_per_parse[i], 1, JSON_READY);
+        test_one_json_number("-", NULL, BPP, 0, JSON_NEED_MORE);
+        test_one_json_number("-0", int_value(&result, 0), BPP, 0, JSON_READY);
+        test_one_json_number("-0-", int_value(&result, 0), BPP, 1, JSON_READY);
 
-        test_one_json_number("-0.", NULL, bytes_per_parse[i], 0, JSON_NEED_MORE);
+        test_one_json_number("-0.", NULL, BPP, 0, JSON_NEED_MORE);
         TEST_JSON_FLO(-0.3, JSON_READY);
         TEST_JSON_FLO(-0.34, JSON_READY);
         TEST_JSON_FLO(-0.345, JSON_READY);
-        test_one_json_number("-0.345 ", flo_value(&result, -0.345), bytes_per_parse[i], 1, JSON_READY);
-        test_one_json_number("-X", NULL, bytes_per_parse[i], 1, JSON_INPUT_ERROR);
-        test_one_json_number("-0. ", NULL, bytes_per_parse[i], 1, JSON_INPUT_ERROR);
+        test_one_json_number("-0.345 ", flo_value(&result, -0.345), BPP, 1, JSON_READY);
+        test_one_json_number("-X", NULL, BPP, 1, JSON_INPUT_ERROR);
+        test_one_json_number("-0. ", NULL, BPP, 1, JSON_INPUT_ERROR);
 
         TEST_JSON_INT(-1, JSON_READY);
-        test_one_json_number("-1234 ", int_value(&result, -1234), bytes_per_parse[i], 1, JSON_READY);
+        test_one_json_number("-1234 ", int_value(&result, -1234), BPP, 1, JSON_READY);
 
         TEST_JSON_INT(1, JSON_READY);
-        test_one_json_number("1 ", int_value(&result, 1), bytes_per_parse[i], 1, JSON_READY);
-        test_one_json_number("1234 ", int_value(&result, 1234), bytes_per_parse[i], 1, JSON_READY);
+        test_one_json_number("1 ", int_value(&result, 1), BPP, 1, JSON_READY);
+        test_one_json_number("1234 ", int_value(&result, 1234), BPP, 1, JSON_READY);
 
-        test_one_json_number("1.", NULL, bytes_per_parse[i], 0, JSON_NEED_MORE);
-        test_one_json_number("1234.", NULL, bytes_per_parse[i], 0, JSON_NEED_MORE);
+        test_one_json_number("1.", NULL, BPP, 0, JSON_NEED_MORE);
+        test_one_json_number("1234.", NULL, BPP, 0, JSON_NEED_MORE);
         TEST_JSON_FLO(1.1, JSON_READY);
         TEST_JSON_FLO(1234.1, JSON_READY);
-        test_one_json_number("1234. ", NULL, bytes_per_parse[i], 1, JSON_INPUT_ERROR);
+        test_one_json_number("1234. ", NULL, BPP, 1, JSON_INPUT_ERROR);
     }
 
     return 0;
 #undef TEST_JSON_INT
 #undef TEST_JSON_FLO
+#undef BPP
 }
 
 /****************************************************************************/
