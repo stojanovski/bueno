@@ -697,9 +697,23 @@ do { \
 } while (0)
 #define BPP bytes_per_parse[i]
     union json_number_union_t result;
-    static const size_t bytes_per_parse[] = {100, 1, 2, 3, 6};
+    static const size_t bytes_per_parse[] = {100, 1, 2, 3, 5};
     unsigned i;
     (void)argc; (void)argv;
+
+    test_one_json_number("0e", NULL, 100, 0, JSON_NEED_MORE);
+    test_one_json_number("0e-", NULL, 100, 0, JSON_NEED_MORE);
+    test_one_json_number("0E+", NULL, 100, 0, JSON_NEED_MORE);
+    test_one_json_number("0e ", NULL, 100, 1, JSON_INPUT_ERROR);
+    test_one_json_number("0e- ", NULL, 100, 1, JSON_INPUT_ERROR);
+    test_one_json_number("0E+ ", NULL, 100, 1, JSON_INPUT_ERROR);
+#if 0
+    /* these are still not implemented; also, conversion to actual number
+     * if not there also */
+    test_one_json_number("1e", NULL, 100, 0, JSON_NEED_MORE);
+    test_one_json_number("12e-", NULL, 100, 0, JSON_NEED_MORE);
+    test_one_json_number("123E+", NULL, 100, 0, JSON_NEED_MORE);
+#endif
 
     test_one_json_number("0", int_value(&result, 0), 1, 0, JSON_READY);
 

@@ -206,6 +206,9 @@ static void append_integer_to_char_buffer(const json_int_t in,
 #define NUM_STATE_GOT_FRACTION_DIGIT 4
 #define NUM_STATE_GOT_NEGATIVE 5
 #define NUM_STATE_GOT_NONZERO 6
+#define NUM_STATE_GOT_EXPONENT 7
+#define NUM_STATE_GOT_EXP_DIGIT 8
+#define NUM_STATE_GOT_EXP_SIGN 9
 
 #define IS_NONZERO_DIGIT(c) ((c) >= '1' && (c) <= '9')
 #define IS_DIGIT(c) ((c) >= '0' && (c) <= '9')
@@ -353,6 +356,24 @@ at_NUM_STATE_GOT_ZERO:
                 goto done;
             }
             goto at_NUM_STATE_GOT_SEPARATOR;
+        case 'E':
+        case 'e':
+            assert(jnum->type == JSON_INTEGER);
+            jnum->type = JSON_FLOATING;
+            assert(char_buffer_size(&jnum->buffer) == 0);
+            if (jnum->negative)
+                char_buffer_append(&jnum->buffer, "-", 1);
+            append_integer_to_char_buffer(
+                jnum->number.integer,
+                &jnum->buffer);
+            char_buffer_append(&jnum->buffer, "e", 1);
+            strref_trim_front(next_chunk, 1);
+            jnum->state = NUM_STATE_GOT_EXPONENT;
+            if (next_chunk->size == 0) {
+                ret = JSON_NEED_MORE;
+                goto done;
+            }
+            goto at_NUM_STATE_GOT_EXPONENT;
         default:
             ret = JSON_READY;
             goto done;
@@ -375,6 +396,64 @@ at_NUM_STATE_GOT_SEPARATOR:
 
 at_NUM_STATE_GOT_FRACTION_DIGIT:
     case NUM_STATE_GOT_FRACTION_DIGIT:
+        {
+            char *cur, *end;
+            assert(next_chunk->size > 0);
+            assert(char_buffer_size(&jnum->buffer) > 0);
+            strref_get_start_and_end(next_chunk, &cur, &end);
+            while (cur < end && IS_DIGIT(*cur))
+                ++cur;
+            if (cur > next_chunk->start) {
+                const size_t len = cur - next_chunk->start;
+                char_buffer_append(&jnum->buffer, next_chunk->start, len);
+                strref_trim_front(next_chunk, len);
+            }
+            ret = JSON_READY;
+            goto done;
+        }
+
+at_NUM_STATE_GOT_EXPONENT:
+    case NUM_STATE_GOT_EXPONENT:
+        {
+            char c;
+            assert(next_chunk->size > 0);
+            c = *next_chunk->start;
+            switch (c) {
+            case '+':
+            case '-':
+                char_buffer_append(&jnum->buffer, &c, 1);
+                strref_trim_front(next_chunk, 1);
+                jnum->state = NUM_STATE_GOT_EXP_SIGN;
+                if (next_chunk->size == 0) {
+                    ret = JSON_NEED_MORE;
+                    goto done;
+                }
+                goto at_NUM_STATE_GOT_EXP_SIGN;
+                break;
+            default:
+                if (!IS_DIGIT(c))
+                    goto input_error;
+            }
+
+            char_buffer_append(&jnum->buffer, &c, 1);
+            strref_trim_front(next_chunk, 1);
+            jnum->state = NUM_STATE_GOT_EXP_DIGIT;
+            if (next_chunk->size == 0) {
+                ret = JSON_READY;
+                goto done;
+            }
+            goto at_NUM_STATE_GOT_EXP_DIGIT;
+        }
+
+at_NUM_STATE_GOT_EXP_SIGN:
+    case NUM_STATE_GOT_EXP_SIGN:
+        assert(next_chunk->size > 0);
+        if (!IS_DIGIT(*next_chunk->start))
+            goto input_error;
+        goto at_NUM_STATE_GOT_EXP_DIGIT;
+
+at_NUM_STATE_GOT_EXP_DIGIT:
+    case NUM_STATE_GOT_EXP_DIGIT:
         {
             char *cur, *end;
             assert(next_chunk->size > 0);
