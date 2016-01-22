@@ -61,5 +61,6 @@ void json_number_uninit(json_number_t *jnum);
 enum json_code_t json_number_parse(json_number_t *jnum, strref_t *next_chunk);
 enum json_type_t json_number_result(json_number_t *jnum,
                                     union json_number_union_t *result);
+void json_number_as_str(json_number_t *jnum, strref_t *str);
 
 #endif  /* _JSON_H_ */

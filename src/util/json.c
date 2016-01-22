@@ -189,16 +189,6 @@ void json_number_uninit(json_number_t *jnum)
     char_buffer_uninit(&jnum->buffer);
 }
 
-static void append_integer_to_char_buffer(const json_int_t in, 
-                                          struct char_buffer_t *cb)
-{
-    char buf[100];
-    int ret = sprintf_s(buf, sizeof(buf), "%lld", (long long)in);
-    assert(ret != -1);
-    /* TODO: avoid extra copy here */
-    char_buffer_append(cb, buf, strlen(buf));
-}
-
 #define NUM_STATE_INIT 0
 #define NUM_STATE_GOT_MINUS 1
 #define NUM_STATE_GOT_ZERO 2
@@ -228,6 +218,7 @@ at_NUM_STATE_INIT:
         switch (*next_chunk->start) {
         case '0':
             assert(jnum->type == JSON_INTEGER);
+            char_buffer_append(&jnum->buffer, next_chunk->start, 1);
             strref_trim_front(next_chunk, 1);
             jnum->state = NUM_STATE_GOT_ZERO;
             if (next_chunk->size == 0) {
@@ -238,6 +229,7 @@ at_NUM_STATE_INIT:
         case '-':
             assert(jnum->negative == 0);
             jnum->negative = 1;
+            char_buffer_append(&jnum->buffer, next_chunk->start, 1);
             strref_trim_front(next_chunk, 1);
             jnum->state = NUM_STATE_GOT_NEGATIVE;
             if (next_chunk->size == 0) {
@@ -249,6 +241,7 @@ at_NUM_STATE_INIT:
             if (IS_NONZERO_DIGIT(*next_chunk->start)) {
                 assert(jnum->type == JSON_INTEGER);
                 jnum->number.integer = (json_int_t)(*next_chunk->start - '0');
+                char_buffer_append(&jnum->buffer, next_chunk->start, 1);
                 strref_trim_front(next_chunk, 1);
                 jnum->state = NUM_STATE_GOT_NONZERO;
                 if (next_chunk->size == 0) {
@@ -265,6 +258,7 @@ at_NUM_STATE_GOT_NEGATIVE:
         assert(next_chunk->size > 0);
         switch (*next_chunk->start) {
         case '0':
+            char_buffer_append(&jnum->buffer, next_chunk->start, 1);
             strref_trim_front(next_chunk, 1);
             jnum->state = NUM_STATE_GOT_ZERO;
             if (next_chunk->size == 0) {
@@ -277,6 +271,7 @@ at_NUM_STATE_GOT_NEGATIVE:
                 assert(jnum->type == JSON_INTEGER);
                 jnum->number.integer *= 10;  /* TODO: handle overflow */
                 jnum->number.integer = (json_int_t)(*next_chunk->start - '0');
+                char_buffer_append(&jnum->buffer, next_chunk->start, 1);
                 strref_trim_front(next_chunk, 1);
                 jnum->state = NUM_STATE_GOT_NONZERO;
                 if (next_chunk->size == 0) {
@@ -303,6 +298,7 @@ at_NUM_STATE_GOT_NONZERO:
             }
             if (cur > next_chunk->start) {
                 const size_t len = cur - next_chunk->start;
+                char_buffer_append(&jnum->buffer, next_chunk->start, len);
                 strref_trim_front(next_chunk, len);
             }
             if (next_chunk->size == 0) {
@@ -314,12 +310,6 @@ at_NUM_STATE_GOT_NONZERO:
                  * into a floating point number */
                 assert(jnum->type == JSON_INTEGER);
                 jnum->type = JSON_FLOATING;
-                assert(char_buffer_size(&jnum->buffer) == 0);
-                if (jnum->negative)
-                    char_buffer_append(&jnum->buffer, "-", 1);
-                append_integer_to_char_buffer(
-                    jnum->number.integer,
-                    &jnum->buffer);
                 char_buffer_append(&jnum->buffer, ".", 1);
                 strref_trim_front(next_chunk, 1);
                 jnum->state = NUM_STATE_GOT_SEPARATOR;
@@ -342,12 +332,6 @@ at_NUM_STATE_GOT_ZERO:
              * into a floating point number */
             assert(jnum->type == JSON_INTEGER);
             jnum->type = JSON_FLOATING;
-            assert(char_buffer_size(&jnum->buffer) == 0);
-            if (jnum->negative)
-                char_buffer_append(&jnum->buffer, "-", 1);
-            append_integer_to_char_buffer(
-                jnum->number.integer,
-                &jnum->buffer);
             char_buffer_append(&jnum->buffer, ".", 1);
             strref_trim_front(next_chunk, 1);
             jnum->state = NUM_STATE_GOT_SEPARATOR;
@@ -360,12 +344,6 @@ at_NUM_STATE_GOT_ZERO:
         case 'e':
             assert(jnum->type == JSON_INTEGER);
             jnum->type = JSON_FLOATING;
-            assert(char_buffer_size(&jnum->buffer) == 0);
-            if (jnum->negative)
-                char_buffer_append(&jnum->buffer, "-", 1);
-            append_integer_to_char_buffer(
-                jnum->number.integer,
-                &jnum->buffer);
             char_buffer_append(&jnum->buffer, "e", 1);
             strref_trim_front(next_chunk, 1);
             jnum->state = NUM_STATE_GOT_EXPONENT;
@@ -493,4 +471,9 @@ enum json_type_t json_number_result(json_number_t *jnum,
     }
 
     return jnum->type;
+}
+
+void json_number_as_str(json_number_t *jnum, strref_t *str)
+{
+    char_buffer_get(&jnum->buffer, str);
 }

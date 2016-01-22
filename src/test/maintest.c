@@ -620,8 +620,15 @@ static int test_json_string(int argc, char **argv)
     return 0;
 }
 
+static int compare_char_and_strref(const char *ch, strref_t *str)
+{
+    return strlen(ch) == str->size &&
+        (str->size == 0 || strncmp(ch, str->start, strlen(ch)) == 0);
+}
+
 static void test_one_json_number(char *instr,
-                                 union json_number_union_t *outstr,
+                                 const char *outstr,
+                                 union json_number_union_t *out,
                                  size_t max_bytes_per_parse,
                                  size_t unconsumed_chars,
                                  enum json_code_t last_expected_retval)
@@ -655,17 +662,24 @@ static void test_one_json_number(char *instr,
     ASSERT_NONZERO(retval == last_expected_retval);
 
     type = json_number_result(&jnum, &result);
-    json_number_uninit(&jnum);
 
     ASSERT_INT((int)inref.size, (int)unconsumed_chars);
 
-    if (outstr != NULL) {
+    if (out != NULL) {
         if (type == JSON_INTEGER)
-            ASSERT_NONZERO(result.integer == outstr->integer);
+            ASSERT_NONZERO(result.integer == out->integer);
         else
-            ASSERT_NONZERO(result.floating == outstr->floating);
+            ASSERT_NONZERO(result.floating == out->floating);
     }
 
+    if (outstr != NULL) {
+        strref_t ref = {0};
+        json_number_as_str(&jnum, &ref);
+        ASSERT_NONZERO(compare_char_and_strref(outstr, &ref));
+        strref_uninit(&ref);
+    }
+
+    json_number_uninit(&jnum);
     strref_uninit(&inref);
     strref_uninit(&outref);
     strref_uninit(&next_chunk);
@@ -689,11 +703,11 @@ static int test_json_number(int argc, char **argv)
 {
 #define TEST_JSON_FLO(val, last_status) \
 do { \
-    test_one_json_number(#val, flo_value(&result, val), 100, 0, last_status); \
+    test_one_json_number(#val, #val, flo_value(&result, val), 100, 0, last_status); \
 } while (0)
 #define TEST_JSON_INT(val, last_status) \
 do { \
-    test_one_json_number(#val, int_value(&result, val), bytes_per_parse[i], 0, last_status); \
+    test_one_json_number(#val, #val, int_value(&result, val), bytes_per_parse[i], 0, last_status); \
 } while (0)
 #define BPP bytes_per_parse[i]
     union json_number_union_t result;
@@ -701,66 +715,68 @@ do { \
     unsigned i;
     (void)argc; (void)argv;
 
-    test_one_json_number("0e", NULL, 100, 0, JSON_NEED_MORE);
-    test_one_json_number("0e-", NULL, 100, 0, JSON_NEED_MORE);
-    test_one_json_number("0E+", NULL, 100, 0, JSON_NEED_MORE);
-    test_one_json_number("0e ", NULL, 100, 1, JSON_INPUT_ERROR);
-    test_one_json_number("0e- ", NULL, 100, 1, JSON_INPUT_ERROR);
-    test_one_json_number("0E+ ", NULL, 100, 1, JSON_INPUT_ERROR);
+    test_one_json_number("0e", NULL, NULL, 100, 0, JSON_NEED_MORE);
+    test_one_json_number("0e-", NULL, NULL, 100, 0, JSON_NEED_MORE);
+    test_one_json_number("0E+", NULL, NULL, 100, 0, JSON_NEED_MORE);
+    test_one_json_number("0e ", NULL, NULL, 100, 1, JSON_INPUT_ERROR);
+    test_one_json_number("0e- ", NULL, NULL, 100, 1, JSON_INPUT_ERROR);
+    test_one_json_number("0E+ ", NULL, NULL, 100, 1, JSON_INPUT_ERROR);
 #if 0
     /* these are still not implemented; also, conversion to actual number
      * if not there also */
-    test_one_json_number("1e", NULL, 100, 0, JSON_NEED_MORE);
-    test_one_json_number("12e-", NULL, 100, 0, JSON_NEED_MORE);
-    test_one_json_number("123E+", NULL, 100, 0, JSON_NEED_MORE);
+    test_one_json_number("1e", NULL, NULL, 100, 0, JSON_NEED_MORE);
+    test_one_json_number("12e-", NULL, NULL, 100, 0, JSON_NEED_MORE);
+    test_one_json_number("123E+", NULL, NULL, 100, 0, JSON_NEED_MORE);
 #endif
 
-    test_one_json_number("0", int_value(&result, 0), 1, 0, JSON_READY);
+    test_one_json_number("0", NULL, int_value(&result, 0), 1, 0, JSON_READY);
 
     for (i = 0; i < ARRAY_SIZE(bytes_per_parse); ++i)
     {
-        test_one_json_number("0.", NULL, BPP, 0, JSON_NEED_MORE);
-        test_one_json_number("0x", int_value(&result, 0), BPP, 1, JSON_READY);
+        test_one_json_number("0.", NULL, NULL, BPP, 0, JSON_NEED_MORE);
+        test_one_json_number("0x", NULL, int_value(&result, 0), BPP, 1, JSON_READY);
         TEST_JSON_FLO(0.3, JSON_READY);
         TEST_JSON_FLO(0.34, JSON_READY);
         TEST_JSON_FLO(0.345, JSON_READY);
-        test_one_json_number("0.345  ", flo_value(&result, 0.345), BPP, 2, JSON_READY);
-        test_one_json_number(".", NULL, BPP, 1, JSON_INPUT_ERROR);
-        test_one_json_number("x", NULL, BPP, 1, JSON_INPUT_ERROR);
-        test_one_json_number("0. ", NULL, BPP, 1, JSON_INPUT_ERROR);
+        test_one_json_number("0.345  ", NULL, flo_value(&result, 0.345), BPP, 2, JSON_READY);
+        test_one_json_number(".", NULL, NULL, BPP, 1, JSON_INPUT_ERROR);
+        test_one_json_number("x", NULL, NULL, BPP, 1, JSON_INPUT_ERROR);
+        test_one_json_number("0. ", NULL, NULL, BPP, 1, JSON_INPUT_ERROR);
 
-        test_one_json_number("-", NULL, BPP, 0, JSON_NEED_MORE);
-        test_one_json_number("-0", int_value(&result, 0), BPP, 0, JSON_READY);
-        test_one_json_number("-0-", int_value(&result, 0), BPP, 1, JSON_READY);
+        test_one_json_number("-", NULL, NULL, BPP, 0, JSON_NEED_MORE);
+        test_one_json_number("-0", NULL, int_value(&result, 0), BPP, 0, JSON_READY);
+        test_one_json_number("-0-", NULL, int_value(&result, 0), BPP, 1, JSON_READY);
 
-        test_one_json_number("-0.", NULL, BPP, 0, JSON_NEED_MORE);
+        test_one_json_number("-0.", NULL, NULL, BPP, 0, JSON_NEED_MORE);
         TEST_JSON_FLO(-0.3, JSON_READY);
         TEST_JSON_FLO(-0.34, JSON_READY);
         TEST_JSON_FLO(-0.345, JSON_READY);
-        test_one_json_number("-0.345 ", flo_value(&result, -0.345), BPP, 1, JSON_READY);
-        test_one_json_number("-X", NULL, BPP, 1, JSON_INPUT_ERROR);
-        test_one_json_number("-0. ", NULL, BPP, 1, JSON_INPUT_ERROR);
+        test_one_json_number("-0.345 ", NULL, flo_value(&result, -0.345), BPP, 1, JSON_READY);
+        test_one_json_number("-X", NULL, NULL, BPP, 1, JSON_INPUT_ERROR);
+        test_one_json_number("-0. ", NULL, NULL, BPP, 1, JSON_INPUT_ERROR);
 
         TEST_JSON_INT(-1, JSON_READY);
-        test_one_json_number("-1234 ", int_value(&result, -1234), BPP, 1, JSON_READY);
+        test_one_json_number("-1234 ", NULL, int_value(&result, -1234), BPP, 1, JSON_READY);
 
         TEST_JSON_INT(1, JSON_READY);
-        test_one_json_number("1 ", int_value(&result, 1), BPP, 1, JSON_READY);
-        test_one_json_number("1234 ", int_value(&result, 1234), BPP, 1, JSON_READY);
+        TEST_JSON_INT(10000000, JSON_READY);
+        TEST_JSON_INT(-3100000, JSON_READY);
+        test_one_json_number("1 ", NULL, int_value(&result, 1), BPP, 1, JSON_READY);
+        test_one_json_number("1234 ", NULL, int_value(&result, 1234), BPP, 1, JSON_READY);
 
-        test_one_json_number("1.", NULL, BPP, 0, JSON_NEED_MORE);
-        test_one_json_number("1234.", NULL, BPP, 0, JSON_NEED_MORE);
+        test_one_json_number("1.", NULL, NULL, BPP, 0, JSON_NEED_MORE);
+        test_one_json_number("1234.", NULL, NULL, BPP, 0, JSON_NEED_MORE);
         TEST_JSON_FLO(1.1, JSON_READY);
         TEST_JSON_FLO(1234.1, JSON_READY);
-        test_one_json_number("1234. ", NULL, BPP, 1, JSON_INPUT_ERROR);
+        test_one_json_number("1234. ", NULL, NULL, BPP, 1, JSON_INPUT_ERROR);
 
-        test_one_json_number("-1.", NULL, BPP, 0, JSON_NEED_MORE);
-        test_one_json_number("-12345.", NULL, BPP, 0, JSON_NEED_MORE);
+        test_one_json_number("-1.", NULL, NULL, BPP, 0, JSON_NEED_MORE);
+        test_one_json_number("-12345.", NULL, NULL, BPP, 0, JSON_NEED_MORE);
         TEST_JSON_FLO(-1.1, JSON_READY);
         TEST_JSON_FLO(-12345.6789, JSON_READY);
         TEST_JSON_FLO(-12345.678900, JSON_READY);
-        test_one_json_number("-12. ", NULL, BPP, 1, JSON_INPUT_ERROR);
-        test_one_json_number("-1234567. ", NULL, BPP, 1, JSON_INPUT_ERROR);
+        test_one_json_number("-12. ", NULL, NULL, BPP, 1, JSON_INPUT_ERROR);
+        test_one_json_number("-1234567. ", NULL, NULL, BPP, 1, JSON_INPUT_ERROR);
     }
 
     return 0;
