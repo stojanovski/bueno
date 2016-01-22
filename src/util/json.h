@@ -38,11 +38,11 @@ enum json_code_t json_string_parse(json_string_t *jstr, strref_t *next_chunk);
 void json_string_result(json_string_t *jstr, strref_t *result);
 
 typedef double json_double_t;
-typedef ssize_t json_int_t;
+typedef int64_t json_int_t;
 
 union json_number_union_t {
     json_double_t floating;
-    ssize_t integer;
+    json_int_t integer;
 };
 
 enum json_type_t { JSON_INTEGER, JSON_FLOATING };

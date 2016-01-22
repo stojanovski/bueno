@@ -686,7 +686,7 @@ static void test_one_json_number(char *instr,
 }
 
 static union json_number_union_t *int_value(union json_number_union_t *num,
-                                            size_t val)
+                                            int64_t val)
 {
     num->integer = val;
     return num;
