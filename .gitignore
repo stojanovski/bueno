@@ -8,4 +8,9 @@ src/**/Debug/
 src/**/Release/
 debug/
 release/
+Backup*/
+UpgradeLog*.htm
+*.VC.db
+*.vcxproj
+*.vcproj
 

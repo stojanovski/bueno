@@ -17,6 +17,8 @@
 #ifndef _TREE_H_
 #define _TREE_H_
 
+#include <stddef.h>
+
 /* inspired by linux kernel's container_of() macro */
 #define get_container(type, member, ptr) \
     ((type *)(((char *)(ptr)) - ((char *)&(((type *)0)->member))))
