@@ -6,6 +6,7 @@
 typedef unsigned __int8  uint8_t;
 typedef unsigned __int16 uint16_t;
 typedef __int64          int64_t;
+typedef unsigned __int64 uint64_t;
 typedef SSIZE_T          ssize_t;
 #endif
 

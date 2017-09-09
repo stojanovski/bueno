@@ -659,10 +659,10 @@ static void test_one_json_number(char *instr,
             break; /* exhausted the input */
     }
 
+    if (retval == JSON_READY)
+        retval = json_number_result(&jnum, &type, &result);
+
     ASSERT_NONZERO(retval == last_expected_retval);
-
-    type = json_number_result(&jnum, &result);
-
     ASSERT_INT((int)inref.size, (int)unconsumed_chars);
 
     if (out != NULL) {
@@ -693,7 +693,7 @@ static union json_number_union_t *int_value(union json_number_union_t *num,
 }
 
 static union json_number_union_t *flo_value(union json_number_union_t *num,
-                                            json_double_t val)
+                                            double val)
 {
     num->floating = val;
     return num;
@@ -714,20 +714,6 @@ do { \
     static const size_t bytes_per_parse[] = {100, 1, 2, 3, 5};
     unsigned i;
     (void)argc; (void)argv;
-
-    test_one_json_number("0e", NULL, NULL, 100, 0, JSON_NEED_MORE);
-    test_one_json_number("0e-", NULL, NULL, 100, 0, JSON_NEED_MORE);
-    test_one_json_number("0E+", NULL, NULL, 100, 0, JSON_NEED_MORE);
-    test_one_json_number("0e ", NULL, NULL, 100, 1, JSON_INPUT_ERROR);
-    test_one_json_number("0e- ", NULL, NULL, 100, 1, JSON_INPUT_ERROR);
-    test_one_json_number("0E+ ", NULL, NULL, 100, 1, JSON_INPUT_ERROR);
-#if 0
-    /* these are still not implemented; also, conversion to actual number
-     * if not there also */
-    test_one_json_number("1e", NULL, NULL, 100, 0, JSON_NEED_MORE);
-    test_one_json_number("12e-", NULL, NULL, 100, 0, JSON_NEED_MORE);
-    test_one_json_number("123E+", NULL, NULL, 100, 0, JSON_NEED_MORE);
-#endif
 
     test_one_json_number("0", NULL, int_value(&result, 0), 1, 0, JSON_READY);
 
@@ -777,6 +763,61 @@ do { \
         TEST_JSON_FLO(-12345.678900, JSON_READY);
         test_one_json_number("-12. ", NULL, NULL, BPP, 1, JSON_INPUT_ERROR);
         test_one_json_number("-1234567. ", NULL, NULL, BPP, 1, JSON_INPUT_ERROR);
+
+        test_one_json_number("0e", NULL, NULL, BPP, 0, JSON_NEED_MORE);
+        test_one_json_number("0e-", NULL, NULL, BPP, 0, JSON_NEED_MORE);
+        test_one_json_number("0E+", NULL, NULL, BPP, 0, JSON_NEED_MORE);
+        test_one_json_number("0e ", NULL, NULL, BPP, 1, JSON_INPUT_ERROR);
+        test_one_json_number("0e- ", NULL, NULL, BPP, 1, JSON_INPUT_ERROR);
+        test_one_json_number("0E+ ", NULL, NULL, BPP, 1, JSON_INPUT_ERROR);
+        test_one_json_number("0.E+ ", NULL, NULL, BPP, 3, JSON_INPUT_ERROR);
+        test_one_json_number("1.E+ ", NULL, NULL, BPP, 3, JSON_INPUT_ERROR);
+
+        test_one_json_number("1e", NULL, NULL, BPP, 0, JSON_NEED_MORE);
+        test_one_json_number("12e-", NULL, NULL, BPP, 0, JSON_NEED_MORE);
+        test_one_json_number("123E+", NULL, NULL, BPP, 0, JSON_NEED_MORE);
+
+        test_one_json_number("0e0", NULL, flo_value(&result, 0.0), BPP, 0, JSON_READY);
+        test_one_json_number("0e1", NULL, flo_value(&result, 0.0), BPP, 0, JSON_READY);
+        test_one_json_number("0e2", NULL, flo_value(&result, 0.0), BPP, 0, JSON_READY);
+        test_one_json_number("0e2 ", NULL, flo_value(&result, 0.0), BPP, 1, JSON_READY);
+        test_one_json_number("0e12", NULL, flo_value(&result, 0.0), BPP, 0, JSON_READY);
+        test_one_json_number("0e123  ", NULL, flo_value(&result, 0.0), BPP, 2, JSON_READY);
+
+        test_one_json_number("1e0", NULL, flo_value(&result, 1.0), BPP, 0, JSON_READY);
+        test_one_json_number("1e0 ", NULL, flo_value(&result, 1.0), BPP, 1, JSON_READY);
+        test_one_json_number("1e+0", NULL, flo_value(&result, 1.0), BPP, 0, JSON_READY);
+        test_one_json_number("1e+0  ", NULL, flo_value(&result, 1.0), BPP, 2, JSON_READY);
+
+        test_one_json_number("1e1", NULL, flo_value(&result, 10.0), BPP, 0, JSON_READY);
+        test_one_json_number("1e1 ", NULL, flo_value(&result, 10.0), BPP, 1, JSON_READY);
+        test_one_json_number("1e+", NULL, NULL, BPP, 0, JSON_NEED_MORE);
+        test_one_json_number("1e+.", NULL, NULL, BPP, 1, JSON_INPUT_ERROR);
+        test_one_json_number("1e+2", NULL, flo_value(&result, 100.0), BPP, 0, JSON_READY);
+        test_one_json_number("10e+2 ", NULL, flo_value(&result, 1000.0), BPP, 1, JSON_READY);
+        test_one_json_number("10e+2.", NULL, flo_value(&result, 1000.0), BPP, 1, JSON_READY);
+        test_one_json_number("2e-", NULL, NULL, BPP, 0, JSON_NEED_MORE);
+        test_one_json_number("2e-3", NULL, flo_value(&result, 0.002), BPP, 0, JSON_READY);
+        test_one_json_number("2.3e+2", NULL, flo_value(&result, 230), BPP, 0, JSON_READY);
+        test_one_json_number("2.31e+2", NULL, flo_value(&result, 231), BPP, 0, JSON_READY);
+        test_one_json_number("2.30e-2 ", NULL, flo_value(&result, 0.023), BPP, 1, JSON_READY);
+        test_one_json_number("1e+10", NULL, flo_value(&result, 10000000000.0), BPP, 0, JSON_READY);
+        test_one_json_number("1e10 ", NULL, flo_value(&result, 10000000000.0), BPP, 1, JSON_READY);
+        test_one_json_number("-2e-10", NULL, flo_value(&result, -0.0000000002), BPP, 0, JSON_READY);
+        test_one_json_number("10.5e+2 ", NULL, flo_value(&result, 1050.0), BPP, 1, JSON_READY);
+        test_one_json_number("1.0e2", NULL, flo_value(&result, 100.0), BPP, 0, JSON_READY);
+
+        /* should error out on extreme values */
+        test_one_json_number("1.0e1000000", NULL, NULL, BPP, 0, JSON_INPUT_ERROR);
+        test_one_json_number("-1.0e-1000000", NULL, NULL, BPP, 0, JSON_INPUT_ERROR);
+        test_one_json_number("100000000000000000000000000000000000000", NULL, NULL, BPP, 0, JSON_INPUT_ERROR);
+        test_one_json_number("-99999999999999999999999999999999999999", NULL, NULL, BPP, 0, JSON_INPUT_ERROR);
+
+        /* check integer boundary values */
+        test_one_json_number("9223372036854775807", NULL, NULL, BPP, 0, JSON_READY);
+        test_one_json_number("-9223372036854775807", NULL, NULL, BPP, 0, JSON_READY);
+        test_one_json_number("9223372036854775808", NULL, NULL, BPP, 0, JSON_INPUT_ERROR);
+        test_one_json_number("-9223372036854775808", NULL, NULL, BPP, 0, JSON_INPUT_ERROR);
     }
 
     return 0;

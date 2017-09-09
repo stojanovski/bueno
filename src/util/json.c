@@ -2,6 +2,8 @@
 #include <string.h>
 #include <assert.h>
 #include <stdio.h>
+#include <errno.h>
+#include <stdlib.h>
 
 void json_string_init(json_string_t *jstr)
 {
@@ -177,11 +179,12 @@ void json_string_result(json_string_t *jstr, strref_t *result)
 
 void json_number_init(json_number_t *jnum)
 {
-    jnum->number.integer = 0;
+    jnum->int_value = 0;
+    jnum->int_overflow = 0;
+    jnum->int_negative = 0;
     jnum->type = JSON_INTEGER;
     char_buffer_init(&jnum->buffer);
     jnum->state = 0;
-    jnum->negative = 0;
 }
 
 void json_number_uninit(json_number_t *jnum)
@@ -202,6 +205,7 @@ void json_number_uninit(json_number_t *jnum)
 
 #define IS_NONZERO_DIGIT(c) ((c) >= '1' && (c) <= '9')
 #define IS_DIGIT(c) ((c) >= '0' && (c) <= '9')
+#define IS_EXPONENT(c) ((c) == 'e' || (c) == 'E')
 
 enum json_code_t json_number_parse(json_number_t *jnum, strref_t *next_chunk)
 {
@@ -215,9 +219,9 @@ enum json_code_t json_number_parse(json_number_t *jnum, strref_t *next_chunk)
     switch (jnum->state) {
 at_NUM_STATE_INIT:
     case NUM_STATE_INIT:
+        assert(jnum->type == JSON_INTEGER);
         switch (*next_chunk->start) {
         case '0':
-            assert(jnum->type == JSON_INTEGER);
             char_buffer_append(&jnum->buffer, next_chunk->start, 1);
             strref_trim_front(next_chunk, 1);
             jnum->state = NUM_STATE_GOT_ZERO;
@@ -227,8 +231,8 @@ at_NUM_STATE_INIT:
             }
             goto at_NUM_STATE_GOT_ZERO;
         case '-':
-            assert(jnum->negative == 0);
-            jnum->negative = 1;
+            assert(jnum->int_negative == 0);
+            jnum->int_negative = 1;
             char_buffer_append(&jnum->buffer, next_chunk->start, 1);
             strref_trim_front(next_chunk, 1);
             jnum->state = NUM_STATE_GOT_NEGATIVE;
@@ -240,7 +244,7 @@ at_NUM_STATE_INIT:
         default:
             if (IS_NONZERO_DIGIT(*next_chunk->start)) {
                 assert(jnum->type == JSON_INTEGER);
-                jnum->number.integer = (json_int_t)(*next_chunk->start - '0');
+                jnum->int_value = (int64_t)(*next_chunk->start - '0');
                 char_buffer_append(&jnum->buffer, next_chunk->start, 1);
                 strref_trim_front(next_chunk, 1);
                 jnum->state = NUM_STATE_GOT_NONZERO;
@@ -269,8 +273,7 @@ at_NUM_STATE_GOT_NEGATIVE:
         default:
             if (IS_NONZERO_DIGIT(*next_chunk->start)) {
                 assert(jnum->type == JSON_INTEGER);
-                jnum->number.integer *= 10;  /* TODO: handle overflow */
-                jnum->number.integer = (json_int_t)(*next_chunk->start - '0');
+                jnum->int_value += (int64_t)(*next_chunk->start - '0');
                 char_buffer_append(&jnum->buffer, next_chunk->start, 1);
                 strref_trim_front(next_chunk, 1);
                 jnum->state = NUM_STATE_GOT_NONZERO;
@@ -291,9 +294,17 @@ at_NUM_STATE_GOT_NONZERO:
             assert(jnum->type == JSON_INTEGER);
             strref_get_start_and_end(next_chunk, &cur, &end);
             while (cur < end && IS_DIGIT(*cur)) {
-                /* TODO: handle overflow */
-                jnum->number.integer *= 10;
-                jnum->number.integer += (json_int_t)(*cur - '0');
+                if (!jnum->int_overflow) {
+                    const uint64_t oldval = jnum->int_value;
+                    jnum->int_value *= 10;
+                    jnum->int_value += (int64_t)(*cur - '0');
+                    /* detect overflow */
+                    if (((uint64_t)jnum->int_value & 0x8000000000000000) != 0) {
+                        /* may also represent underflow if the input is
+                         * negative integer (when jnum->int_negative==1) */
+                        jnum->int_overflow = 1;
+                    }
+                }
                 ++cur;
             }
             if (cur > next_chunk->start) {
@@ -305,7 +316,8 @@ at_NUM_STATE_GOT_NONZERO:
                 ret = JSON_READY;
                 goto done;
             }
-            else if (*next_chunk->start == '.') {
+            switch (*next_chunk->start) {
+            case '.':
                 /* convert integer to string, so that later it can be converted
                  * into a floating point number */
                 assert(jnum->type == JSON_INTEGER);
@@ -318,6 +330,18 @@ at_NUM_STATE_GOT_NONZERO:
                     goto done;
                 }
                 goto at_NUM_STATE_GOT_SEPARATOR;
+            case 'E':
+            case 'e':
+                assert(jnum->type == JSON_INTEGER);
+                jnum->type = JSON_FLOATING;
+                char_buffer_append(&jnum->buffer, "e", 1);
+                strref_trim_front(next_chunk, 1);
+                jnum->state = NUM_STATE_GOT_EXPONENT;
+                if (next_chunk->size == 0) {
+                    ret = JSON_NEED_MORE;
+                    goto done;
+                }
+                goto at_NUM_STATE_GOT_EXPONENT;
             }
             ret = JSON_READY;
             goto done;
@@ -325,7 +349,7 @@ at_NUM_STATE_GOT_NONZERO:
 
 at_NUM_STATE_GOT_ZERO:
     case NUM_STATE_GOT_ZERO:
-        assert(jnum->number.integer == 0);
+        assert(jnum->int_value == 0);
         switch (*next_chunk->start) {
         case '.':
             /* convert integer to string, so that later it can be converted
@@ -386,6 +410,18 @@ at_NUM_STATE_GOT_FRACTION_DIGIT:
                 char_buffer_append(&jnum->buffer, next_chunk->start, len);
                 strref_trim_front(next_chunk, len);
             }
+            if (next_chunk->size > 0 && IS_EXPONENT(next_chunk->start[0])) {
+                /* 'E' or 'e' found after the digit */
+                assert(jnum->type == JSON_FLOATING);
+                char_buffer_append(&jnum->buffer, "e", 1);
+                strref_trim_front(next_chunk, 1);
+                jnum->state = NUM_STATE_GOT_EXPONENT;
+                if (next_chunk->size == 0) {
+                    ret = JSON_NEED_MORE;
+                    goto done;
+                }
+                goto at_NUM_STATE_GOT_EXPONENT;
+            }
             ret = JSON_READY;
             goto done;
         }
@@ -426,8 +462,10 @@ at_NUM_STATE_GOT_EXPONENT:
 at_NUM_STATE_GOT_EXP_SIGN:
     case NUM_STATE_GOT_EXP_SIGN:
         assert(next_chunk->size > 0);
-        if (!IS_DIGIT(*next_chunk->start))
-            goto input_error;
+        if (!IS_DIGIT(*next_chunk->start)) {
+            ret = JSON_READY;
+            goto done;
+        }
         goto at_NUM_STATE_GOT_EXP_DIGIT;
 
 at_NUM_STATE_GOT_EXP_DIGIT:
@@ -455,22 +493,41 @@ input_error:
     return JSON_INPUT_ERROR;
 }
 
-enum json_type_t json_number_result(json_number_t *jnum,
+enum json_code_t json_number_result(json_number_t *jnum,
+                                    enum json_type_t *type,
                                     union json_number_union_t *result)
 {
+    enum json_code_t retval = JSON_READY;
+
     if (jnum->type == JSON_INTEGER) {
-        result->integer = jnum->negative ? -jnum->number.integer :
-                                           jnum->number.integer;
+        if (jnum->int_overflow) {
+            retval = JSON_INPUT_ERROR;
+        }
+        else {
+            result->integer = jnum->int_negative ?
+                -(int64_t)jnum->int_value :
+                (int64_t)jnum->int_value;
+        }
     }
     else {
-        strref_t ref = {0};
+        strref_t ref = { 0 };
+        char *endptr;
         assert(jnum->type == JSON_FLOATING);
         char_buffer_get(&jnum->buffer, &ref);
-        result->floating = atof(ref.start);
+#ifdef _MSC_VER
+        errno = 0;
+        result->floating = strtod(ref.start, &endptr);
+        int err = errno;
+        if (*endptr != '\0' || errno == ERANGE)
+            retval = JSON_INPUT_ERROR;
+#else
+#    error "Take care to implement this correctly on non-Windows platforms"
+#endif
         strref_uninit(&ref);
     }
 
-    return jnum->type;
+    *type = jnum->type;
+    return retval;
 }
 
 void json_number_as_str(json_number_t *jnum, strref_t *str)

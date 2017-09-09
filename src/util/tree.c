@@ -27,14 +27,6 @@ void bintree_init(bintree_root_t *root)
     root->size = 0;
 }
 
-static bintree_node_t *grandparent(bintree_node_t *node)
-{
-    if ((node != NULL) && (node->parent != NULL))
-        return node->parent->parent;
-    else
-        return NULL;
-}
-
 static void rotate_right(bintree_node_t *parent)
 {
     bintree_node_t *grandparent, *orig_left;
