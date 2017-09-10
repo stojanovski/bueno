@@ -297,13 +297,28 @@ at_NUM_STATE_GOT_NONZERO:
                 if (!jnum->int_overflow) {
                     const uint64_t oldval = jnum->int_value;
                     jnum->int_value *= 10;
-                    jnum->int_value += (int64_t)(*cur - '0');
-                    /* detect overflow */
-                    if (((uint64_t)jnum->int_value & 0x8000000000000000) != 0) {
-                        /* may also represent underflow if the input is
-                         * negative integer (when jnum->int_negative==1) */
-                        jnum->int_overflow = 1;
+                    /* detect overflow; don't check using division on smaller
+                     * numbers for efficency sake since multiplying them by 10
+                     * couldn't possible cause overflow */
+                    if ((oldval & 0xff00000000000000) == 0 ||
+                        jnum->int_value / 10 == oldval)
+                    {
+                        jnum->int_value += *cur - '0';
+/* test some assumptions */
+#if (0x7fffffffffffffff != LLONG_MAX)
+#   error "Expected 0x7fffffffffffffff == LLONG_MAX"
+#elif (0x8000000000000000 != LLONG_MIN)
+#   error "Expected 0x8000000000000000 == LLONG_MIN"
+#endif
+                        if ((jnum->int_value & 0x8000000000000000) != 0) {
+                            /* may also represent underflow if the input is
+                             * negative integer (when jnum->int_negative==1) */
+                            if (jnum->int_negative == 0 || jnum->int_value > 0x8000000000000000)
+                                jnum->int_overflow = 1;
+                        }
                     }
+                    else
+                        jnum->int_overflow = 1;
                 }
                 ++cur;
             }
