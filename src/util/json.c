@@ -5,6 +5,12 @@
 #include <errno.h>
 #include <stdlib.h>
 
+#define IS_NONZERO_DIGIT(c) ((c) >= '1' && (c) <= '9')
+#define IS_DIGIT(c) ((c) >= '0' && (c) <= '9')
+#define IS_EXPONENT(c) ((c) == 'e' || (c) == 'E')
+#define IS_FIRST_STRING_CHAR(c) ((c) == '"')
+#define IS_FIRST_NUMBER_CHAR(c) (IS_DIGIT(c) || (c) == '-')
+
 void json_string_init(json_string_t *jstr)
 {
     jstr->escape_seq_len = 0;
@@ -202,10 +208,6 @@ void json_number_uninit(json_number_t *jnum)
 #define NUM_STATE_GOT_EXPONENT 7
 #define NUM_STATE_GOT_EXP_DIGIT 8
 #define NUM_STATE_GOT_EXP_SIGN 9
-
-#define IS_NONZERO_DIGIT(c) ((c) >= '1' && (c) <= '9')
-#define IS_DIGIT(c) ((c) >= '0' && (c) <= '9')
-#define IS_EXPONENT(c) ((c) == 'e' || (c) == 'E')
 
 enum json_code_t json_number_parse(json_number_t *jnum, strref_t *next_chunk)
 {
@@ -509,7 +511,7 @@ input_error:
 }
 
 enum json_code_t json_number_result(json_number_t *jnum,
-                                    enum json_type_t *type,
+                                    enum json_data_t *type,
                                     union json_number_union_t *result)
 {
     enum json_code_t retval = JSON_READY;
@@ -548,4 +550,109 @@ enum json_code_t json_number_result(json_number_t *jnum,
 void json_number_as_str(json_number_t *jnum, strref_t *str)
 {
     char_buffer_get(&jnum->buffer, str);
+}
+
+void json_value_init(json_value_t *jval)
+{
+    jval->type = JSON_NO_VALUE;
+    jval->state = 0;
+}
+
+void json_value_uninit(json_value_t *jval)
+{
+    if (jval->type == JSON_STRING)
+        json_string_uninit(&jval->value.str);
+    else if (jval->type == JSON_NUMBER)
+        json_number_uninit(&jval->value.num);
+    else {
+        assert(jval->type == JSON_NO_VALUE);
+    }
+    jval->type = JSON_NO_VALUE;
+}
+
+#define VAL_STATE_INIT 0
+#define VAL_STATE_GOT_STRING 1
+#define VAL_STATE_GOT_NUMBER 2
+
+enum json_code_t json_value_parse(json_value_t *jval, strref_t *next_chunk)
+{
+    enum json_code_t ret;
+    assert(next_chunk->size > 0);  /* always expect some input */
+
+    /* to prevent warning about unused jump label */
+    if (jval->state == VAL_STATE_INIT)
+        goto at_VAL_STATE_INIT;
+
+    switch (jval->state) {
+at_VAL_STATE_INIT:
+    case VAL_STATE_INIT:
+    {
+        const char c = *next_chunk->start;
+        assert(jval->type == JSON_NO_VALUE);
+
+        if (IS_FIRST_STRING_CHAR(c)) {
+            jval->type = JSON_STRING;
+            json_string_init(&jval->value.str);
+            /* strip the leading double-quote as json_string_* does not
+             * consume those, but only the string contents within the
+             * double-quotes */
+            strref_trim_front(next_chunk, 1);
+            jval->state = VAL_STATE_GOT_STRING;
+            if (next_chunk->size == 0) {
+                ret = JSON_NEED_MORE;
+                goto done;
+            }
+            goto at_VAL_STATE_GOT_STRING;
+        }
+        else if (IS_FIRST_NUMBER_CHAR(c)) {
+            jval->type = JSON_NUMBER;
+            json_number_init(&jval->value.num);
+            jval->state = VAL_STATE_GOT_NUMBER;
+            goto at_VAL_STATE_GOT_NUMBER;
+        }
+        ret = JSON_INPUT_ERROR;
+        goto done;
+    }
+
+at_VAL_STATE_GOT_STRING:
+    case VAL_STATE_GOT_STRING:
+        assert(next_chunk->size > 0);
+        ret = json_string_parse(&jval->value.str, next_chunk);
+        if (ret == JSON_READY) {
+            if (next_chunk->size == 0 || *next_chunk->start != '"') {
+                /* we still need the tail double-quote */
+                ret = JSON_NEED_MORE;
+                goto done;
+            }
+            /* consume the tail double-quote, and we are done */
+            strref_trim_front(next_chunk, 1);
+            ret = JSON_READY;
+        }
+        assert(ret == JSON_READY ||
+               ret == JSON_NEED_MORE ||
+               ret == JSON_INPUT_ERROR);
+        goto done;
+
+at_VAL_STATE_GOT_NUMBER:
+    case VAL_STATE_GOT_NUMBER:
+        assert(next_chunk->size > 0);
+        ret = json_number_parse(&jval->value.num, next_chunk);
+        assert(ret == JSON_READY ||
+               ret == JSON_NEED_MORE ||
+               ret == JSON_INPUT_ERROR);
+        goto done;
+    }
+
+done:
+    return ret;
+}
+
+void json_value_result(json_value_t *jval,
+                       enum json_value_t *type,
+                       union json_value_union_t **result)
+{
+    /* must be called only after successful parse */
+    assert(jval->type != JSON_NO_VALUE);
+    *type = jval->type;
+    *result = &jval->value;
 }

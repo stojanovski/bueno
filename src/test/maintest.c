@@ -25,38 +25,7 @@
 #include <string.h>
 #include <time.h>
 
-static int test_line_reader_old(int argc, char **argv)
-{
-    struct strrdr_t fr, lr;
-    char *buf;
-    int ret;
-    struct char_buffer_t cb;
-
-    char_buffer_init(&cb);
-    /* po_file_reader_init(&fr, "c:\\temp\\file.txt"); */
-    po_file_reader_init(&fr, "C:\\Users\\igor\\Downloads\\SPL-88078_notes.txt");
-    po_line_reader_init(&lr, &fr);
-    if ((ret = strrdr_open(&lr)) < 0) {
-        const char *error;
-        int errnum;
-        strrdr_get_error(&lr, &error, &errnum);
-        printf("Got errnum=%d error=\"%s\"\n", errnum, error);
-        goto done;
-    }
-
-    while ((ret = strrdr_read(&lr, &buf)) > 0) {
-        char_buffer_set(&cb, buf, ret);
-        /* printf("LINE (len=%4d): \"%s\"\n", ret, cb.buf); */
-    }
-done:
-    po_line_reader_uninit(&lr);
-    po_file_reader_uninit(&fr);
-    char_buffer_uninit(&cb);
-
-    return 0;
-}
-
-static void test_line_reader_speed()
+static int line_reader_speed(int argc, char **argv)
 {
     DWORD start_tm = GetTickCount();
     DWORD end_tm;
@@ -64,12 +33,10 @@ static void test_line_reader_speed()
     char *buf;
     int ret;
     struct char_buffer_t cb;
+    assert(argc > 0);
 
     char_buffer_init(&cb);
-    /* po_file_reader_init(&fr, "c:\\temp\\file.txt"); */
-    /* po_file_reader_init(&fr, "C:\\Users\\igor\\Downloads\\SPL-88078_notes.txt"); */
-    /* po_file_reader_init(&fr, "C:\\Users\\igor\\Downloads\\movies\\Parada.2011.DVDRip.XviD.avi"); */
-    po_file_reader_init(&fr, "C:\\Users\\igor\\Downloads\\Downloads.zip");
+    po_file_reader_init(&fr, argv[0]);
     if ((ret = strrdr_open(&fr)) < 0) {
         const char *error;
         int errnum;
@@ -95,18 +62,20 @@ static void test_line_reader_speed()
 done:
     po_file_reader_uninit(&fr);
     char_buffer_uninit(&cb);
+
+    return 0;
 }
 
 #define FILE_READER_BUFLEN 1024
 
-static void test_line_reader_speed_baseline()
+static int line_reader_speed_baseline(int argc, char **argv)
 {
     DWORD start_tm = GetTickCount();
     DWORD end_tm;
     FILE *fp;
+    assert(argc > 0);
 
-    /* fp = fopen("C:\\Users\\igor\\Downloads\\movies\\Parada.2011.DVDRip.XviD.avi", "rb"); */
-    fp = fopen("C:\\Users\\igor\\Downloads\\Downloads.zip", "rb");
+    fp = fopen(argv[0], "rb");
     if (fp == NULL) {
         printf("Got errnum=%d\n", (int)GetLastError());
         goto done;
@@ -129,6 +98,8 @@ static void test_line_reader_speed_baseline()
     }
 done:
     fclose(fp);
+
+    return 0;
 }
 
 static const char *line_reader_str =
@@ -287,8 +258,8 @@ static void line_reader_one_test(const char *file_contents, const char *file_pat
     ASSERT_EXP(lines == expected_num_of_lines);
     ASSERT_EXP(computed_hash == expected_hash);
 
-    printf("Finished line reader test.  Data: size=%4u lines=%u\n",
-        (unsigned)file_contents_size, (unsigned)lines);
+    //printf("Finished line reader test.  Data: size=%4u lines=%u\n",
+        //(unsigned)file_contents_size, (unsigned)lines);
 
 done:
     po_line_reader_uninit(&lr);
@@ -461,11 +432,76 @@ static int strref_are_equal(strref_t *left, strref_t *right)
     return 0;
 }
 
-static void test_one_json_string(char *instr,
-                                 char *outstr,
-                                 size_t max_bytes_per_parse,
-                                 size_t unconsumed_chars,
-                                 enum json_code_t last_expected_retval)
+static void test_one_json_string_value(char * const instr,
+                                       char * const outstr,
+                                       const size_t max_bytes_per_parse,
+                                       const size_t unconsumed_chars,
+                                       const enum json_code_t last_expected_retval)
+{
+#define BUFSIZE 1024
+    char buf[BUFSIZE];
+    strref_t inref = {0}, next_chunk = {0}, outref = {0};
+    json_value_t jval;
+    const size_t instr_len = strlen(instr);
+    enum json_code_t retval;
+    enum json_value_t type;
+    union json_value_union_t *result;
+
+    assert(instr_len < BUFSIZE - 3);
+
+    buf[0] = '"';
+    memcpy(&buf[1], instr, instr_len + 1); /* "+ 1" is for '\0' */
+    inref.start = buf;
+    inref.size = instr_len + 1;
+    if (last_expected_retval == JSON_READY) {
+        buf[instr_len + 1] = '"';
+        buf[instr_len + 2] = '\0';
+        ++inref.size;
+    }
+
+    json_value_init(&jval);
+
+    while (1) {
+        size_t orig_chunk_size;
+        strref_assign(&next_chunk, &inref);
+        if (next_chunk.size > max_bytes_per_parse)
+            next_chunk.size = max_bytes_per_parse;
+        orig_chunk_size = next_chunk.size;
+
+        retval = json_value_parse(&jval, &next_chunk);
+        strref_trim_front(&inref, orig_chunk_size - next_chunk.size);
+        if (next_chunk.size > 0)
+            break;  /* ran into double-quotes: done */
+        else if (inref.size == 0)
+            break; /* exhausted the input */
+    }
+
+    ASSERT_NONZERO(retval == last_expected_retval);
+
+    json_value_result(&jval, &type, &result);
+    ASSERT_NONZERO(type == JSON_STRING);
+
+    json_string_result(&result->str, &outref);
+    ASSERT_NONZERO(strref_are_equal(&outref,
+        strref_set_static(&outref, outstr)));
+
+    json_value_uninit(&jval);
+
+    /* it turns out it is a bit complicated to check this... */
+    /* ASSERT_INT((int)inref.size, (int)unconsumed_chars); */
+    (void)unconsumed_chars;
+
+    strref_uninit(&inref);
+    strref_uninit(&outref);
+    strref_uninit(&next_chunk);
+#undef BUFSIZE
+}
+
+static void test_one_json_string(char * const instr,
+                                 char * const outstr,
+                                 const size_t max_bytes_per_parse,
+                                 const size_t unconsumed_chars,
+                                 const enum json_code_t last_expected_retval)
 {
     json_string_t jstr;
     strref_t inref = {0}, result = {0}, outref = {0}, next_chunk = {0};
@@ -504,6 +540,10 @@ static void test_one_json_string(char *instr,
     strref_uninit(&result);
     strref_uninit(&outref);
     strref_uninit(&next_chunk);
+
+    /* test string inside json_value_t */
+    test_one_json_string_value(instr, outstr, max_bytes_per_parse,
+        unconsumed_chars, last_expected_retval);
 }
 
 static void test_json_higher_value_sequences()
@@ -626,50 +666,81 @@ static int compare_char_and_strref(const char *ch, strref_t *str)
         (str->size == 0 || strncmp(ch, str->start, strlen(ch)) == 0);
 }
 
-static void test_one_json_number(char *instr,
-                                 const char *outstr,
-                                 union json_number_union_t *out,
-                                 size_t max_bytes_per_parse,
-                                 size_t unconsumed_chars,
-                                 enum json_code_t last_expected_retval)
+static void test_one_json_number(char * const instr,
+                                 const char * const outstr,
+                                 const union json_number_union_t *out,
+                                 const size_t max_bytes_per_parse,
+                                 const size_t unconsumed_chars,
+                                 const enum json_code_t last_expected_retval)
 {
     json_number_t jnum;
-    strref_t inref = {0}, outref = {0}, next_chunk = {0};
-    enum json_code_t retval;
-    enum json_type_t type;
-    union json_number_union_t result;
+    /* variables that end with _value pertain to testing "json value type" */
+    strref_t inref = {0}, outref = {0}, next_chunk = {0}, next_chunk_value = {0};
+    enum json_code_t retval, retval_value;
+    enum json_data_t type;
+    union json_number_union_t result, result_value;
+    json_value_t jval;
 
     json_number_init(&jnum);
+    json_value_init(&jval);
 
     strref_set_static(&inref, instr);
     assert(inref.size > 0);
 
     while (1) {
         size_t orig_chunk_size;
+
         strref_assign(&next_chunk, &inref);
         if (next_chunk.size > max_bytes_per_parse)
             next_chunk.size = max_bytes_per_parse;
         orig_chunk_size = next_chunk.size;
 
+        next_chunk_value.start = next_chunk.start;
+        next_chunk_value.size = next_chunk.size;
+
         retval = json_number_parse(&jnum, &next_chunk);
+        retval_value = json_value_parse(&jval, &next_chunk_value);
+
         strref_trim_front(&inref, orig_chunk_size - next_chunk.size);
         if (next_chunk.size > 0)
-            break;  /* ran into double-quotes: done */
+            break; /* ran into double-quotes: done */
         else if (inref.size == 0)
             break; /* exhausted the input */
     }
 
-    if (retval == JSON_READY)
+    ASSERT_NONZERO(retval == retval_value);
+    ASSERT_NONZERO(next_chunk.size == next_chunk_value.size);
+
+    if (retval == JSON_READY) {
         retval = json_number_result(&jnum, &type, &result);
+
+        /* now, get the value from the "json value" type */
+        {
+            enum json_value_t value_type;
+            union json_value_union_t *value_result;
+            enum json_data_t value_data_type;
+
+            json_value_result(&jval, &value_type, &value_result);
+            ASSERT_NONZERO(value_type == JSON_NUMBER);
+
+            retval_value = json_number_result(&value_result->num, &value_data_type, &result_value);
+            ASSERT_NONZERO(retval == retval_value);
+            ASSERT_NONZERO(type == value_data_type);
+        }
+    }
 
     ASSERT_NONZERO(retval == last_expected_retval);
     ASSERT_INT((int)inref.size, (int)unconsumed_chars);
 
     if (out != NULL) {
-        if (type == JSON_INTEGER)
+        if (type == JSON_INTEGER) {
             ASSERT_NONZERO(result.integer == out->integer);
-        else
+            ASSERT_NONZERO(result_value.integer == out->integer);
+        }
+        else {
             ASSERT_NONZERO(result.floating == out->floating);
+            ASSERT_NONZERO(result_value.floating == out->floating);
+        }
     }
 
     if (outstr != NULL) {
@@ -680,9 +751,11 @@ static void test_one_json_number(char *instr,
     }
 
     json_number_uninit(&jnum);
+    json_value_uninit(&jval);
     strref_uninit(&inref);
     strref_uninit(&outref);
     strref_uninit(&next_chunk);
+    strref_uninit(&next_chunk_value);
 }
 
 static union json_number_union_t *int_value(union json_number_union_t *num,
@@ -827,75 +900,140 @@ do { \
 #undef BPP
 }
 
+static void test_one_json_value(char *instr,
+                                const char *outstr,
+                                union json_number_union_t *out,
+                                size_t max_bytes_per_parse,
+                                size_t unconsumed_chars,
+                                enum json_code_t last_expected_retval)
+{
+}
+
+static int test_json_value(int argc, char **argv)
+{
+    test_one_json_string_value("igor", "igor", 100, 0, JSON_READY);
+    test_one_json_string_value("\\", "", 100, 0, JSON_NEED_MORE);
+    test_one_json_string_value("", "", 1, 0, JSON_READY);
+    test_one_json_string_value("", "", 1, 0, JSON_READY);
+
+    return 0;
+}
+
 /****************************************************************************/
 
 static struct {
-    const char *opt_name;
+    const char *cmd_name;
     int (* func)(int , char **);
     int min_args_needed;
     const char *args_description;
 } argopts[] = {
+    /* tests should take no cmdline arguments */
     {"test_line_reader", test_line_reader, 0, ""},
     {"test_bintree", test_bintree, 0, ""},
     {"test_json_string", test_json_string, 0, ""},
     {"test_json_number", test_json_number, 0, ""},
+    {"test_json_value", test_json_value, 0, "" },
+
+    /* test utilities */
+    {"line_reader_speed_baseline", line_reader_speed_baseline, 1, "<input file>" },
+    {"line_reader_speed", line_reader_speed, 1, "<input file>" },
 };
 static const unsigned argopts_size = ARRAY_SIZE(argopts);
 
-static void usage(char *argv0)
+static void usage()
 {
     unsigned i;
 
-    printf("%s usage:\n\n", argv0);
+    printf("USAGE:\n");
+    printf("\nYou can use the following command line arguments:\n\n");
     for (i = 0; i < argopts_size; ++i)
-        printf("  %s %s\n\n", argopts[i].opt_name, argopts[i].args_description);
+        printf("  %s %s\n", argopts[i].cmd_name, argopts[i].args_description);
+    printf("\nRunning unit tests:\n\n");
+    printf("If you use \"test\" as command line argument, it will run all unit tests\n");
+    printf("(that is, all of the above commands that begin with the string \"test\").\n");
+    printf("If the first argument begins with the word \"test\", it will use that\n");
+    printf("string as a prefix, causing it to run a subset of tests that have that\n");
+    printf("common prefix.  For example, using \"test_json_\" will run all tests that\n");
+    printf("begin with \"test_json_\".\n\n");
 
     exit(12);
 }
 
 int main(int argc, char **argv)
 {
-    int exit_code = 13;
+    int exit_code = 0;
+    unsigned cmds_run = 0;
+    unsigned tests_failed = 0;
+    const int run_tests = argc > 1 ?
+        strncmp(argv[1], "test", 4) == 0 : 0;
 
     if (argc > 1) {
         unsigned i;
+        if (run_tests && argc > 2) {
+            printf("WARN: Found %d trailing argument(s) which will be ignored.\n\n",
+                argc - 2);
+        }
+
         for (i = 0; i < argopts_size; ++i) {
-            if (strcmp(argv[1], argopts[i].opt_name) == 0) {
+            const char * const cmd = argopts[i].cmd_name;
+            /* commands that begin with "test" are treated specially,
+             * as unit tests */
+            if (run_tests && strncmp(cmd, argv[1], strlen(argv[1])) == 0) {
+                assert(argopts[i].min_args_needed == 0);
+                printf("Running TEST %s...\n", cmd);
+                int ret = argopts[i].func(argc - 2, argv + 2);
+                if (ret) {
+                    printf(" ERROR: TEST %s FAILED!  (code=%d)\n", cmd, ret);
+                    exit_code = ret;  /* keep the latest error exit code */
+                    ++tests_failed;
+                }
+                ++cmds_run;
+            }
+            else if (strcmp(argv[1], cmd) == 0) {
+                assert(argc > 1);
                 if (argc - 2 < argopts[i].min_args_needed) {
-                    printf("ERROR: Wrong number of parameters for option %s.\n\n",
-                        argopts[i].opt_name);
-                    usage(argv[0]);
+                    printf("ERROR: Wrong number of parameters for command %s.\n\n", cmd);
+                    usage();
                 }
                 exit_code = argopts[i].func(argc - 2, argv + 2);
+                ++cmds_run;
                 break;
             }
         }
 
-        if (i == argopts_size) {
-            /* couldn't file the specified option: print usage */
-            printf("ERROR: Option \"%s\" is invalid.\n\n", argv[1]);
-            usage(argv[0]);
+        if (cmds_run == 0) {
+            /* couldn't match command with the specified cmdline: print usage */
+            printf("ERROR: Command \"%s\" is invalid.\n\n", argv[1]);
+            usage();
         }
     }
     else {
-        /* TODO: run all tests that don't require user params */
-        usage(argv[0]);
+        usage();
     }
 
-    if (exit_code == 0)
-        printf("\nDONE.\n");
-    else
-        printf("\nERROR code=%d\n", exit_code);
+    if (exit_code == 0) {
+        if (run_tests) {
+            if (cmds_run > 1)
+                printf("\nAll %u tests PASSED.\n", cmds_run);
+            else
+                printf("\nTest PASSED.\n");
+        }
+        else
+            printf("\nDONE.\n");
+    }
+    else {
+        if (run_tests) {
+            if (cmds_run > 1) {
+                printf("\n%u/%u test(s) FAILED!\n", tests_failed, cmds_run);
+            }
+            else {
+                /* code already printed above */
+                printf("\nTest FAILED!\n");
+            }
+        }
+        else
+            printf("\nERROR code=%d\n", exit_code);
+    }
 
-    /* test_line_reader_speed(); */
-    /* test_line_reader_speed_baseline(); */
     return exit_code;
 }
-
-/* 
-func main() {
-    var i = 23;
-    ref j = 34;
-    i = i + 22;
-}
-*/
