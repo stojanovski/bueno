@@ -483,7 +483,7 @@ static void test_one_json_string_value(char * const instr,
 
     json_string_result(&result->str, &outref);
     ASSERT_NONZERO(strref_are_equal(&outref,
-        strref_set_static(&outref, outstr)));
+                                     strref_set_static(&outref, outstr)));
 
     json_value_uninit(&jval);
 
@@ -530,11 +530,12 @@ static void test_one_json_string(char * const instr,
     ASSERT_NONZERO(retval == last_expected_retval);
 
     json_string_result(&jstr, &result);
-    json_string_uninit(&jstr);
 
     ASSERT_INT((int)inref.size, (int)unconsumed_chars);
     ASSERT_NONZERO(strref_are_equal(&result,
-                                    strref_set_static(&outref, outstr)));
+                                     strref_set_static(&outref, outstr)));
+
+    json_string_uninit(&jstr);
 
     strref_uninit(&inref);
     strref_uninit(&result);
