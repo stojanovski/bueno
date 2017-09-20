@@ -11,6 +11,7 @@ release/
 Backup*/
 UpgradeLog*.htm
 *.VC.db
+*.VC.opendb
 *.vcxproj
 *.vcproj
 
