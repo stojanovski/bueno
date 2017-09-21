@@ -126,17 +126,17 @@ static int line_reader_open(void *data)
 static int line_reader_drain_buffer(struct line_reader_t *ln, char **buf)
 {
     const char *ptr, *end;
-    strref_t str = {0};
+    seg_t seg;
     int ret = 0;
-    char_buffer_get(&ln->cb, &str);
-    ptr = str.start;
-    end = str.start + str.size;
+    char_buffer_get(&ln->cb, &seg);
+    ptr = seg.start;
+    end = seg.start + seg.size;
 
     while (ptr < end) {
         if (*ptr == '\n') {
             ++ptr;
-            *buf = str.start;
-            ln->bytes_returned = ptr - str.start;
+            *buf = seg.start;
+            ln->bytes_returned = ptr - seg.start;
             ret = 1;
             goto done;
         }
@@ -144,14 +144,13 @@ static int line_reader_drain_buffer(struct line_reader_t *ln, char **buf)
     }
 
 done:
-    strref_uninit(&str);
     return ret;
 }
 
 static int line_reader_read(void *data, char **buf)
 {
     struct line_reader_t *ln = (struct line_reader_t *)data;
-    strref_t str = {0};
+    seg_t seg;
     int ret;
 
     if (ln->at_eof)
@@ -171,9 +170,9 @@ static int line_reader_read(void *data, char **buf)
         if (ret == 0) {
             /* EOF: return whatever is inside the buffer */
             ln->at_eof = 1;
-            char_buffer_get(&ln->cb, &str);
-            *buf = str.start;
-            ret = (int)str.size;
+            char_buffer_get(&ln->cb, &seg);
+            *buf = seg.start;
+            ret = (int)seg.size;
             goto done;
         }
         else if (ret < 0) {
@@ -189,7 +188,6 @@ static int line_reader_read(void *data, char **buf)
     }
 
 done:
-    strref_uninit(&str);
     return ret;
 }
 

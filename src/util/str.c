@@ -18,86 +18,27 @@
 #include <stdlib.h>
 #include <string.h>
 
-void strref_init(strref_t *str, size_t size)
+void str_init(str_t *str, size_t size)
 {
     if (size > 0) {
-        str->__buf = (char *)malloc(size);
-        str->start = str->__buf;
+        *(char **)&(str->start) = (char *)malloc(size);
         str->size = size;
     }
     else
-        memset(str, 0, sizeof(strref_t));
+        memset(str, 0, sizeof(str_t));
 }
 
-void strref_uninit(strref_t *str)
+void str_uninit(str_t *str)
 {
-    free(str->__buf);
+    free(*(char **)&(str->start));
 }
 
-void strref_clear(strref_t *str)
+void str_take_ownership(str_t *dst, str_t *src)
 {
-    free(str->__buf);
-    memset(str, 0, sizeof(strref_t));
+    free(*(char **)&(dst->start));
+    memcpy(dst, src, sizeof(str_t));
+    memset(src, 0, sizeof(str_t));
 }
-
-void strref_assign_char(strref_t *str, char *start, size_t size)
-{
-    free(str->__buf);
-    str->__buf = NULL;
-    str->start = start;
-    str->size = size;
-}
-
-static void strref_copy_helper(strref_t *str, const char *start, size_t size)
-{
-    if (size > 0) {
-        assert(start != NULL);
-        str->__buf = (char *)malloc(size);
-        memcpy(str->__buf, start, size);
-        str->start = str->__buf;
-        str->size = size;
-    }
-    else
-        memset(str, 0, sizeof(strref_t));
-}
-
-void strref_copy_char(strref_t *str, const char *start, size_t size)
-{
-    free(str->__buf);
-    strref_copy_helper(str, start, size);
-}
-
-void strref_assign(strref_t *dst, const strref_t *src)
-{
-    free(dst->__buf);
-    dst->__buf = NULL;
-    dst->start = src->start;
-    dst->size = src->size;
-}
-
-void strref_take_ownership(strref_t *dst, strref_t *src)
-{
-    free(dst->__buf);
-    memcpy(dst, src, sizeof(strref_t));
-    memset(src, 0, sizeof(strref_t));
-}
-
-void strref_copy(strref_t *dst, const strref_t *src)
-{
-    free(dst->__buf);
-    strref_copy_helper(dst, src->start, src->size);
-}
-
-strref_t *strref_set_static(strref_t *str, char *null_term_str)
-{
-    strref_clear(str);
-    if (null_term_str != NULL) {
-        str->start = null_term_str;
-        str->size = strlen(null_term_str);
-    }
-    return str;
-}
-
 
 /* char_buffer_t */
 
@@ -140,12 +81,12 @@ void char_buffer_pop_front(struct char_buffer_t *cb, size_t sz)
     strarray_pop_front(&cb->arr, sz);
 }
 
-void char_buffer_get(struct char_buffer_t *cb, strref_t *str)
+void char_buffer_get(struct char_buffer_t *cb, seg_t *seg)
 {
-    strarray_get_strref(&cb->arr, str);
+    strarray_get_strref(&cb->arr, seg);
     /* remove the trailing null from the size */
-    assert(str->size > 0);
-    --str->size;
+    assert(seg->size > 0);
+    --seg->size;
 }
 
 size_t char_buffer_size(struct char_buffer_t *cb)
@@ -161,7 +102,7 @@ size_t char_buffer_size(struct char_buffer_t *cb)
 void strarray_init(strarray_t *arr, size_t element_size, size_t init_capacity)
 {
     assert(init_capacity > 0);
-    strref_init(&arr->str, element_size * init_capacity);
+    str_init(&arr->str, element_size * init_capacity);
     arr->size = 0;
     arr->element_size = element_size;
 }
@@ -173,7 +114,7 @@ void strarray_clear(strarray_t *arr)
 
 void strarray_uninit(strarray_t *arr)
 {
-    strref_uninit(&arr->str);
+    str_uninit(&arr->str);
 }
 
 size_t strarray_size(strarray_t *arr)
@@ -183,17 +124,17 @@ size_t strarray_size(strarray_t *arr)
 
 void strarray_append(strarray_t *arr, const void *buf, size_t sz)
 {
-    const size_t cur_capacity = strref_size(&arr->str) / arr->element_size;
+    const size_t cur_capacity = str_size(&arr->str) / arr->element_size;
     size_t need_capacity = cur_capacity;
     while ((arr->size + sz) > need_capacity)
         need_capacity *= 2;
 
     if (need_capacity > cur_capacity) {
-        strref_t newstr;
-        strref_init(&newstr, need_capacity * arr->element_size);
+        str_t newstr;
+        str_init(&newstr, need_capacity * arr->element_size);
         memcpy(newstr.start, arr->str.start, arr->size * arr->element_size);
-        strref_take_ownership(&arr->str, &newstr);
-        strref_uninit(&newstr);
+        str_take_ownership(&arr->str, &newstr);
+        str_uninit(&newstr);
     }
 
     memcpy(arr->str.start + (arr->size * arr->element_size), buf, sz * arr->element_size);
@@ -231,8 +172,8 @@ void strarray_pop_back(strarray_t *arr, size_t sz)
     arr->size -= sz;
 }
 
-void strarray_get_strref(strarray_t *arr, strref_t *str)
+void strarray_get_strref(strarray_t *arr, seg_t *seg)
 {
-    strref_assign(str, &arr->str);
-    str->size = arr->size;
+    seg_from_str(seg, &arr->str);
+    seg->size = arr->size;
 }

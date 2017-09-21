@@ -420,12 +420,7 @@ static int test_bintree(int argc, char **argv)
 
 /* TEST json */
 
-static print_strref(strref_t *str)
-{
-    fwrite(str->start, 1, str->size, stdout);
-}
-
-static int strref_are_equal(strref_t *left, strref_t *right)
+static int seg_are_equal(seg_t *left, seg_t *right)
 {
     if (left->size == right->size)
         return memcmp(left->start, right->start, left->size) == 0;
@@ -440,7 +435,8 @@ static void test_one_json_string_value(char * const instr,
 {
 #define BUFSIZE 1024
     char buf[BUFSIZE];
-    strref_t inref = {0}, next_chunk = {0}, outref = {0};
+    const_seg_t inref, next_chunk;
+    seg_t outref;
     json_value_t jval;
     const size_t instr_len = strlen(instr);
     enum json_code_t retval;
@@ -463,13 +459,13 @@ static void test_one_json_string_value(char * const instr,
 
     while (1) {
         size_t orig_chunk_size;
-        strref_assign(&next_chunk, &inref);
+        const_seg_assign(&next_chunk, &inref);
         if (next_chunk.size > max_bytes_per_parse)
             next_chunk.size = max_bytes_per_parse;
         orig_chunk_size = next_chunk.size;
 
         retval = json_value_parse(&jval, &next_chunk);
-        strref_trim_front(&inref, orig_chunk_size - next_chunk.size);
+        const_seg_trim_front(&inref, orig_chunk_size - next_chunk.size);
         if (next_chunk.size > 0)
             break;  /* ran into double-quotes: done */
         else if (inref.size == 0)
@@ -482,18 +478,14 @@ static void test_one_json_string_value(char * const instr,
     ASSERT_NONZERO(type == JSON_STRING);
 
     json_string_result(&result->str, &outref);
-    ASSERT_NONZERO(strref_are_equal(&outref,
-                                     strref_set_static(&outref, outstr)));
+    ASSERT_NONZERO(seg_are_equal(&outref,
+                                 seg_set_static(&outref, outstr)));
 
     json_value_uninit(&jval);
 
     /* it turns out it is a bit complicated to check this... */
     /* ASSERT_INT((int)inref.size, (int)unconsumed_chars); */
     (void)unconsumed_chars;
-
-    strref_uninit(&inref);
-    strref_uninit(&outref);
-    strref_uninit(&next_chunk);
 #undef BUFSIZE
 }
 
@@ -504,23 +496,24 @@ static void test_one_json_string(char * const instr,
                                  const enum json_code_t last_expected_retval)
 {
     json_string_t jstr;
-    strref_t inref = {0}, result = {0}, outref = {0}, next_chunk = {0};
+    const_seg_t inref, next_chunk;
+    seg_t outref, result;
     enum json_code_t retval;
 
     json_string_init(&jstr);
 
-    strref_set_static(&inref, instr);
+    const_seg_set_static(&inref, instr);
     assert(inref.size > 0);
 
     while (1) {
         size_t orig_chunk_size;
-        strref_assign(&next_chunk, &inref);
+        const_seg_assign(&next_chunk, &inref);
         if (next_chunk.size > max_bytes_per_parse)
             next_chunk.size = max_bytes_per_parse;
         orig_chunk_size = next_chunk.size;
 
         retval = json_string_parse(&jstr, &next_chunk);
-        strref_trim_front(&inref, orig_chunk_size - next_chunk.size);
+        const_seg_trim_front(&inref, orig_chunk_size - next_chunk.size);
         if (next_chunk.size > 0)
             break;  /* ran into double-quotes: done */
         else if (inref.size == 0)
@@ -532,15 +525,10 @@ static void test_one_json_string(char * const instr,
     json_string_result(&jstr, &result);
 
     ASSERT_INT((int)inref.size, (int)unconsumed_chars);
-    ASSERT_NONZERO(strref_are_equal(&result,
-                                     strref_set_static(&outref, outstr)));
+    ASSERT_NONZERO(seg_are_equal(&result,
+                                  seg_set_static(&outref, outstr)));
 
     json_string_uninit(&jstr);
-
-    strref_uninit(&inref);
-    strref_uninit(&result);
-    strref_uninit(&outref);
-    strref_uninit(&next_chunk);
 
     /* test string inside json_value_t */
     test_one_json_string_value(instr, outstr, max_bytes_per_parse,
@@ -661,10 +649,10 @@ static int test_json_string(int argc, char **argv)
     return 0;
 }
 
-static int compare_char_and_strref(const char *ch, strref_t *str)
+static int compare_char_and_seg(const char *ch, seg_t *seg)
 {
-    return strlen(ch) == str->size &&
-        (str->size == 0 || strncmp(ch, str->start, strlen(ch)) == 0);
+    return strlen(ch) == seg->size &&
+        (seg->size == 0 || strncmp(ch, seg->start, strlen(ch)) == 0);
 }
 
 static void test_one_json_number(char * const instr,
@@ -676,7 +664,7 @@ static void test_one_json_number(char * const instr,
 {
     json_number_t jnum;
     /* variables that end with _value pertain to testing "json value type" */
-    strref_t inref = {0}, outref = {0}, next_chunk = {0}, next_chunk_value = {0};
+    const_seg_t inref, next_chunk, next_chunk_value;
     enum json_code_t retval, retval_value;
     enum json_data_t type;
     union json_number_union_t result, result_value;
@@ -685,13 +673,13 @@ static void test_one_json_number(char * const instr,
     json_number_init(&jnum);
     json_value_init(&jval);
 
-    strref_set_static(&inref, instr);
+    const_seg_set_static(&inref, instr);
     assert(inref.size > 0);
 
     while (1) {
         size_t orig_chunk_size;
 
-        strref_assign(&next_chunk, &inref);
+        const_seg_assign(&next_chunk, &inref);
         if (next_chunk.size > max_bytes_per_parse)
             next_chunk.size = max_bytes_per_parse;
         orig_chunk_size = next_chunk.size;
@@ -702,7 +690,7 @@ static void test_one_json_number(char * const instr,
         retval = json_number_parse(&jnum, &next_chunk);
         retval_value = json_value_parse(&jval, &next_chunk_value);
 
-        strref_trim_front(&inref, orig_chunk_size - next_chunk.size);
+        const_seg_trim_front(&inref, orig_chunk_size - next_chunk.size);
         if (next_chunk.size > 0)
             break; /* ran into double-quotes: done */
         else if (inref.size == 0)
@@ -745,18 +733,13 @@ static void test_one_json_number(char * const instr,
     }
 
     if (outstr != NULL) {
-        strref_t ref = {0};
+        seg_t ref;
         json_number_as_str(&jnum, &ref);
-        ASSERT_NONZERO(compare_char_and_strref(outstr, &ref));
-        strref_uninit(&ref);
+        ASSERT_NONZERO(compare_char_and_seg(outstr, &ref));
     }
 
     json_number_uninit(&jnum);
     json_value_uninit(&jval);
-    strref_uninit(&inref);
-    strref_uninit(&outref);
-    strref_uninit(&next_chunk);
-    strref_uninit(&next_chunk_value);
 }
 
 static union json_number_union_t *int_value(union json_number_union_t *num,

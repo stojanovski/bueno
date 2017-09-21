@@ -18,52 +18,88 @@
 #define STR_H
 
 #include <assert.h>
+#include <string.h>
 
-typedef struct _strref_t
+typedef struct _seg_t
 {
     char *start;
     size_t size;
-    char *__buf;
-} strref_t;
+} seg_t;
 
-void strref_init(strref_t *str, size_t size);
-static size_t strref_size(strref_t *str)
+typedef struct _const_seg_t
+{
+    const char *start;
+    size_t size;
+} const_seg_t;
+
+typedef struct _str_t
+{
+    char * const start;
+    size_t size;
+} str_t;
+
+
+/* str_t */
+
+void str_init(str_t *str, size_t size);
+static size_t str_size(str_t *str)
 {
     return str->size;
 }
-void strref_uninit(strref_t *str);
-void strref_clear(strref_t *str);
-void strref_assign_char(strref_t *str, char *start, size_t size);
-void strref_copy_char(strref_t *str, const char *start, size_t size);
-void strref_assign(strref_t *dst, const strref_t *src);
-void strref_take_ownership(strref_t *dst, strref_t *src);
-void strref_copy(strref_t *dst, const strref_t *src);
-static void strref_trim_front(strref_t *str, size_t len)
+void str_uninit(str_t *str);
+void str_take_ownership(str_t *dst, str_t *src);
+
+
+/* seg_t, const_seg_t */
+
+static void const_seg_trim_front(const_seg_t *seg, size_t len)
 {
-    assert(str->start != (char *)0);
-    assert(str->size >= len);
-    str->start += len;
-    str->size -= len;
+    assert(seg->start != (char *)0);
+    assert(seg->size >= len);
+    seg->start += len;
+    seg->size -= len;
 }
-static void strref_trim_back(strref_t *str, size_t len)
+
+static void const_seg_get_start_and_end(const const_seg_t *seg,
+                                        const char **start,
+                                        const char **end)
 {
-    assert(str->start != (char *)0);
-    assert(str->size >= len);
-    str->size -= len;
+    assert(seg->start != (char *)0);
+    *start = seg->start;
+    *end = *start + seg->size;
 }
-static void strref_get_start_and_end(const strref_t *str, char **start, char **end)
+
+static void seg_from_str(seg_t *seg, const str_t *str)
 {
-    assert(str->start != (char *)0);
-    *start = str->start;
-    *end = *start + str->size;
+    seg->start = str->start;
+    seg->size = str->size;
 }
-strref_t *strref_set_static(strref_t *str, char *null_term_str);
+
+static void const_seg_assign(const_seg_t *dst, const const_seg_t *src)
+{
+    dst->start = src->start;
+    dst->size = src->size;
+}
+
+#define SEG_SET_STATIC(_seg_, _null_term_str_) \
+    _seg_->start = _null_term_str_; \
+    _seg_->size = strlen(_null_term_str_); \
+    return _seg_;
+static seg_t *seg_set_static(seg_t *seg, char *null_term_str)
+{
+    SEG_SET_STATIC(seg, null_term_str)
+}
+static const_seg_t *const_seg_set_static(const_seg_t *seg, char *null_term_str)
+{
+    SEG_SET_STATIC(seg, null_term_str)
+}
+
 
 /* strarray_t */
 
 typedef struct _strarray_t
 {
-    strref_t str;
+    str_t str;
     size_t size;
     size_t element_size;
 } strarray_t;
@@ -76,7 +112,8 @@ void strarray_append(strarray_t *arr, const void *buf, size_t sz);
 void strarray_set(strarray_t *arr, const void *buf, size_t sz);
 void strarray_pop_front(strarray_t *arr, size_t sz);
 void strarray_pop_back(strarray_t *arr, size_t sz);
-void strarray_get_strref(strarray_t *arr, strref_t *str);
+void strarray_get_strref(strarray_t *arr, seg_t *seg);
+
 
 /* char_buffer_t */
 
@@ -91,7 +128,7 @@ void char_buffer_uninit(struct char_buffer_t *cb);
 void char_buffer_append(struct char_buffer_t *cb, const char *buf, size_t sz);
 void char_buffer_set(struct char_buffer_t *cb, const char *buf, size_t sz);
 void char_buffer_pop_front(struct char_buffer_t *cb, size_t sz);
-void char_buffer_get(struct char_buffer_t *cb, strref_t *str);
+void char_buffer_get(struct char_buffer_t *cb, seg_t *seg);
 size_t char_buffer_size(struct char_buffer_t *cb);
 
 #endif  /* STR_H */
