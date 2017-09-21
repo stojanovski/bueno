@@ -17,6 +17,7 @@
 #ifndef STR_H
 #define STR_H
 
+#include "types.h"
 #include <assert.h>
 #include <string.h>
 

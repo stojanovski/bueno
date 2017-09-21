@@ -1,3 +1,25 @@
+# linux
+*.o
+*.a
+src/test/test
+
+# editors
+*.swp
+*.swo
+
+# autotools
+**/Makefile
+**/Makefile.in
+**/.deps
+aclocal.m4
+autom4te.cache/
+config.log
+config.status
+configure
+install-sh
+ltmain.sh
+missing
+depcomp
 
 # MSVC
 *.suo

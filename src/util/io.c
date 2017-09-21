@@ -17,7 +17,12 @@
 #include "io.h"
 #include "str.h"
 #include <stdio.h>
-#include <windows.h>
+#ifdef _MSC_VER
+#   include <windows.h>
+#else
+#   include <stdint.h>  /* for int types */
+#   include <errno.h>
+#endif
 #include <assert.h>
 
 int strrdr_open(struct strrdr_t *reader)
@@ -48,12 +53,22 @@ struct file_reader_t
     char buf[FILE_READER_BUFLEN];
 };
 
+/* TODO: put somewhere else */
+static int os_errno()
+{
+#ifdef _MSC_VER
+    return (int)GetLastError();
+#else
+    return errno;
+#endif
+}
+
 static int file_reader_open(void *data)
 {
     struct file_reader_t *fr = (struct file_reader_t *)data;
     fr->fp = fopen(fr->path, "rb");
     if (fr->fp == NULL) {
-        fr->errnum = GetLastError();
+        fr->errnum = os_errno();
         fr->error = "";
         return -1;
     }

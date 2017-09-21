@@ -4,12 +4,21 @@
 #include <stdio.h>
 #include <errno.h>
 #include <stdlib.h>
+#ifndef _MSC_VER
+#   include <math.h>  /* HUGE_VALF, HUGE_VALL */
+#endif
 
 #define IS_NONZERO_DIGIT(c) ((c) >= '1' && (c) <= '9')
 #define IS_DIGIT(c) ((c) >= '0' && (c) <= '9')
 #define IS_EXPONENT(c) ((c) == 'e' || (c) == 'E')
 #define IS_FIRST_STRING_CHAR(c) ((c) == '"')
 #define IS_FIRST_NUMBER_CHAR(c) (IS_DIGIT(c) || (c) == '-')
+
+/* port to linux is still UNDONE: compiling this undone code will either cause
+ * compliation error or the tests will be failing */
+#ifndef _MSV_VER
+#   define PORT_UNDONE
+#endif
 
 void json_string_init(json_string_t *jstr)
 {
@@ -307,10 +316,12 @@ at_NUM_STATE_GOT_NONZERO:
                     {
                         jnum->int_value += *cur - '0';
 /* test some assumptions */
+#ifndef PORT_UNDONE
 #if (0x7fffffffffffffff != LLONG_MAX)
 #   error "Expected 0x7fffffffffffffff == LLONG_MAX"
 #elif (0x8000000000000000 != LLONG_MIN)
 #   error "Expected 0x8000000000000000 == LLONG_MIN"
+#endif
 #endif
                         if ((jnum->int_value & 0x8000000000000000) != 0) {
                             /* may also represent underflow if the input is
@@ -416,7 +427,7 @@ at_NUM_STATE_GOT_SEPARATOR:
 at_NUM_STATE_GOT_FRACTION_DIGIT:
     case NUM_STATE_GOT_FRACTION_DIGIT:
         {
-            char *cur, *end;
+            const char *cur, *end;
             assert(next_chunk->size > 0);
             assert(char_buffer_size(&jnum->buffer) > 0);
             const_seg_get_start_and_end(next_chunk, &cur, &end);
@@ -488,7 +499,7 @@ at_NUM_STATE_GOT_EXP_SIGN:
 at_NUM_STATE_GOT_EXP_DIGIT:
     case NUM_STATE_GOT_EXP_DIGIT:
         {
-            char *cur, *end;
+            const char *cur, *end;
             assert(next_chunk->size > 0);
             assert(char_buffer_size(&jnum->buffer) > 0);
             const_seg_get_start_and_end(next_chunk, &cur, &end);
@@ -538,7 +549,24 @@ enum json_code_t json_number_result(json_number_t *jnum,
         if (*endptr != '\0' || errno == ERANGE)
             retval = JSON_INPUT_ERROR;
 #else
-#    error "Take care to implement this correctly on non-Windows platforms"
+        {
+            double val;
+            errno = 0;
+            val = strtod(ref.start, &endptr);
+
+            if ((errno == ERANGE && (val == HUGE_VALF || val == HUGE_VALL)) ||
+                (errno != 0 && val == 0))
+            {
+                retval = JSON_INPUT_ERROR;
+            }
+            else if (endptr == ref.start) {
+                /* No digits were found */
+                retval = JSON_INPUT_ERROR;
+            }
+            else {
+                result->floating = val;
+            }
+        }
 #endif
     }
 
