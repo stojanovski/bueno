@@ -50,7 +50,7 @@ static void append_uint16_as_utf8(struct char_buffer_t *output, uint16_t in)
     }
 }
 
-enum json_code_t json_string_parse(json_string_t *jstr, const_seg_t *next_chunk)
+enum json_code_t json_string_parse(json_string_t *jstr, cnst_seg_t *next_chunk)
 {
     struct char_buffer_t *output = &jstr->output;
     char c;
@@ -69,7 +69,7 @@ parse:
     {
         const char *cur, *end;
         size_t len;
-        const_seg_get_start_and_end(next_chunk, &cur, &end);
+        cnst_seg_get_start_and_end(next_chunk, &cur, &end);
         assert(cur < end);
 
         do {
@@ -79,7 +79,7 @@ parse:
                 if (cur > next_chunk->start) {
                     const size_t len = cur - next_chunk->start;
                     char_buffer_append(output, next_chunk->start, len);
-                    const_seg_trim_front(next_chunk, len);
+                    cnst_seg_trim_front(next_chunk, len);
                 }
                 goto escape_seq;
             }
@@ -87,7 +87,7 @@ parse:
 
         len = cur - next_chunk->start;
         char_buffer_append(output, next_chunk->start, len);
-        const_seg_trim_front(next_chunk, len);
+        cnst_seg_trim_front(next_chunk, len);
         return JSON_READY;
     }
 
@@ -97,7 +97,7 @@ escape_seq:
     assert(jstr->escape_seq_len > 0 || next_chunk->start[0] == '\\');
     if (jstr->escape_seq_len == 0) {
         jstr->escape_seq_len = 1;
-        const_seg_trim_front(next_chunk, 1);
+        cnst_seg_trim_front(next_chunk, 1);
     }
 
     if (next_chunk->size == 0)
@@ -119,7 +119,7 @@ escape_seq:
         return JSON_INPUT_ERROR;
     }
 
-    const_seg_trim_front(next_chunk, 1);
+    cnst_seg_trim_front(next_chunk, 1);
     /* TODO: make a fast "append char" function */
     char_buffer_append(output, &c, 1);
     jstr->escape_seq_len = 0;
@@ -138,7 +138,7 @@ unicode_escape_seq:
 
     if (jstr->escape_seq_len == 1) {
         ++jstr->escape_seq_len;
-        const_seg_trim_front(next_chunk, 1);
+        cnst_seg_trim_front(next_chunk, 1);
     }
 
     assert(jstr->escape_seq_len >= 2);
@@ -158,7 +158,7 @@ unicode_escape_seq:
         jstr->unicode_escaped_value <<= 4;
         jstr->unicode_escaped_value |= hex_digit_value;
         ++jstr->escape_seq_len;
-        const_seg_trim_front(next_chunk, 1);
+        cnst_seg_trim_front(next_chunk, 1);
     }
 
     if (jstr->escape_seq_len < 6) {
@@ -209,7 +209,7 @@ void json_number_uninit(json_number_t *jnum)
 #define NUM_STATE_GOT_EXP_DIGIT 8
 #define NUM_STATE_GOT_EXP_SIGN 9
 
-enum json_code_t json_number_parse(json_number_t *jnum, const_seg_t *next_chunk)
+enum json_code_t json_number_parse(json_number_t *jnum, cnst_seg_t *next_chunk)
 {
     enum json_code_t ret;
     assert(next_chunk->size > 0);  /* always expect some input */
@@ -225,7 +225,7 @@ at_NUM_STATE_INIT:
         switch (*next_chunk->start) {
         case '0':
             char_buffer_append(&jnum->buffer, next_chunk->start, 1);
-            const_seg_trim_front(next_chunk, 1);
+            cnst_seg_trim_front(next_chunk, 1);
             jnum->state = NUM_STATE_GOT_ZERO;
             if (next_chunk->size == 0) {
                 ret = JSON_READY;
@@ -236,7 +236,7 @@ at_NUM_STATE_INIT:
             assert(jnum->int_negative == 0);
             jnum->int_negative = 1;
             char_buffer_append(&jnum->buffer, next_chunk->start, 1);
-            const_seg_trim_front(next_chunk, 1);
+            cnst_seg_trim_front(next_chunk, 1);
             jnum->state = NUM_STATE_GOT_NEGATIVE;
             if (next_chunk->size == 0) {
                 ret = JSON_NEED_MORE;
@@ -248,7 +248,7 @@ at_NUM_STATE_INIT:
                 assert(jnum->type == JSON_INTEGER);
                 jnum->int_value = (int64_t)(*next_chunk->start - '0');
                 char_buffer_append(&jnum->buffer, next_chunk->start, 1);
-                const_seg_trim_front(next_chunk, 1);
+                cnst_seg_trim_front(next_chunk, 1);
                 jnum->state = NUM_STATE_GOT_NONZERO;
                 if (next_chunk->size == 0) {
                     ret = JSON_READY;
@@ -265,7 +265,7 @@ at_NUM_STATE_GOT_NEGATIVE:
         switch (*next_chunk->start) {
         case '0':
             char_buffer_append(&jnum->buffer, next_chunk->start, 1);
-            const_seg_trim_front(next_chunk, 1);
+            cnst_seg_trim_front(next_chunk, 1);
             jnum->state = NUM_STATE_GOT_ZERO;
             if (next_chunk->size == 0) {
                 ret = JSON_READY;
@@ -277,7 +277,7 @@ at_NUM_STATE_GOT_NEGATIVE:
                 assert(jnum->type == JSON_INTEGER);
                 jnum->int_value += (int64_t)(*next_chunk->start - '0');
                 char_buffer_append(&jnum->buffer, next_chunk->start, 1);
-                const_seg_trim_front(next_chunk, 1);
+                cnst_seg_trim_front(next_chunk, 1);
                 jnum->state = NUM_STATE_GOT_NONZERO;
                 if (next_chunk->size == 0) {
                     ret = JSON_READY;
@@ -294,7 +294,7 @@ at_NUM_STATE_GOT_NONZERO:
             const char *cur, *end;
             assert(next_chunk->size > 0);
             assert(jnum->type == JSON_INTEGER);
-            const_seg_get_start_and_end(next_chunk, &cur, &end);
+            cnst_seg_get_start_and_end(next_chunk, &cur, &end);
             while (cur < end && IS_DIGIT(*cur)) {
                 if (!jnum->int_overflow) {
                     const uint64_t oldval = jnum->int_value;
@@ -327,7 +327,7 @@ at_NUM_STATE_GOT_NONZERO:
             if (cur > next_chunk->start) {
                 const size_t len = cur - next_chunk->start;
                 char_buffer_append(&jnum->buffer, next_chunk->start, len);
-                const_seg_trim_front(next_chunk, len);
+                cnst_seg_trim_front(next_chunk, len);
             }
             if (next_chunk->size == 0) {
                 ret = JSON_READY;
@@ -340,7 +340,7 @@ at_NUM_STATE_GOT_NONZERO:
                 assert(jnum->type == JSON_INTEGER);
                 jnum->type = JSON_FLOATING;
                 char_buffer_append(&jnum->buffer, ".", 1);
-                const_seg_trim_front(next_chunk, 1);
+                cnst_seg_trim_front(next_chunk, 1);
                 jnum->state = NUM_STATE_GOT_SEPARATOR;
                 if (next_chunk->size == 0) {
                     ret = JSON_NEED_MORE;
@@ -352,7 +352,7 @@ at_NUM_STATE_GOT_NONZERO:
                 assert(jnum->type == JSON_INTEGER);
                 jnum->type = JSON_FLOATING;
                 char_buffer_append(&jnum->buffer, "e", 1);
-                const_seg_trim_front(next_chunk, 1);
+                cnst_seg_trim_front(next_chunk, 1);
                 jnum->state = NUM_STATE_GOT_EXPONENT;
                 if (next_chunk->size == 0) {
                     ret = JSON_NEED_MORE;
@@ -374,7 +374,7 @@ at_NUM_STATE_GOT_ZERO:
             assert(jnum->type == JSON_INTEGER);
             jnum->type = JSON_FLOATING;
             char_buffer_append(&jnum->buffer, ".", 1);
-            const_seg_trim_front(next_chunk, 1);
+            cnst_seg_trim_front(next_chunk, 1);
             jnum->state = NUM_STATE_GOT_SEPARATOR;
             if (next_chunk->size == 0) {
                 ret = JSON_NEED_MORE;
@@ -386,7 +386,7 @@ at_NUM_STATE_GOT_ZERO:
             assert(jnum->type == JSON_INTEGER);
             jnum->type = JSON_FLOATING;
             char_buffer_append(&jnum->buffer, "e", 1);
-            const_seg_trim_front(next_chunk, 1);
+            cnst_seg_trim_front(next_chunk, 1);
             jnum->state = NUM_STATE_GOT_EXPONENT;
             if (next_chunk->size == 0) {
                 ret = JSON_NEED_MORE;
@@ -405,7 +405,7 @@ at_NUM_STATE_GOT_SEPARATOR:
         if (!IS_DIGIT(*next_chunk->start))
             goto input_error;
         char_buffer_append(&jnum->buffer, next_chunk->start, 1);
-        const_seg_trim_front(next_chunk, 1);
+        cnst_seg_trim_front(next_chunk, 1);
         jnum->state = NUM_STATE_GOT_FRACTION_DIGIT;
         if (next_chunk->size == 0) {
             ret = JSON_READY;
@@ -419,19 +419,19 @@ at_NUM_STATE_GOT_FRACTION_DIGIT:
             char *cur, *end;
             assert(next_chunk->size > 0);
             assert(char_buffer_size(&jnum->buffer) > 0);
-            const_seg_get_start_and_end(next_chunk, &cur, &end);
+            cnst_seg_get_start_and_end(next_chunk, &cur, &end);
             while (cur < end && IS_DIGIT(*cur))
                 ++cur;
             if (cur > next_chunk->start) {
                 const size_t len = cur - next_chunk->start;
                 char_buffer_append(&jnum->buffer, next_chunk->start, len);
-                const_seg_trim_front(next_chunk, len);
+                cnst_seg_trim_front(next_chunk, len);
             }
             if (next_chunk->size > 0 && IS_EXPONENT(next_chunk->start[0])) {
                 /* 'E' or 'e' found after the digit */
                 assert(jnum->type == JSON_FLOATING);
                 char_buffer_append(&jnum->buffer, "e", 1);
-                const_seg_trim_front(next_chunk, 1);
+                cnst_seg_trim_front(next_chunk, 1);
                 jnum->state = NUM_STATE_GOT_EXPONENT;
                 if (next_chunk->size == 0) {
                     ret = JSON_NEED_MORE;
@@ -453,7 +453,7 @@ at_NUM_STATE_GOT_EXPONENT:
             case '+':
             case '-':
                 char_buffer_append(&jnum->buffer, &c, 1);
-                const_seg_trim_front(next_chunk, 1);
+                cnst_seg_trim_front(next_chunk, 1);
                 jnum->state = NUM_STATE_GOT_EXP_SIGN;
                 if (next_chunk->size == 0) {
                     ret = JSON_NEED_MORE;
@@ -467,7 +467,7 @@ at_NUM_STATE_GOT_EXPONENT:
             }
 
             char_buffer_append(&jnum->buffer, &c, 1);
-            const_seg_trim_front(next_chunk, 1);
+            cnst_seg_trim_front(next_chunk, 1);
             jnum->state = NUM_STATE_GOT_EXP_DIGIT;
             if (next_chunk->size == 0) {
                 ret = JSON_READY;
@@ -491,13 +491,13 @@ at_NUM_STATE_GOT_EXP_DIGIT:
             char *cur, *end;
             assert(next_chunk->size > 0);
             assert(char_buffer_size(&jnum->buffer) > 0);
-            const_seg_get_start_and_end(next_chunk, &cur, &end);
+            cnst_seg_get_start_and_end(next_chunk, &cur, &end);
             while (cur < end && IS_DIGIT(*cur))
                 ++cur;
             if (cur > next_chunk->start) {
                 const size_t len = cur - next_chunk->start;
                 char_buffer_append(&jnum->buffer, next_chunk->start, len);
-                const_seg_trim_front(next_chunk, len);
+                cnst_seg_trim_front(next_chunk, len);
             }
             ret = JSON_READY;
             goto done;
@@ -573,7 +573,7 @@ void json_value_uninit(json_value_t *jval)
 #define VAL_STATE_GOT_STRING 1
 #define VAL_STATE_GOT_NUMBER 2
 
-enum json_code_t json_value_parse(json_value_t *jval, const_seg_t *next_chunk)
+enum json_code_t json_value_parse(json_value_t *jval, cnst_seg_t *next_chunk)
 {
     enum json_code_t ret;
     assert(next_chunk->size > 0);  /* always expect some input */
@@ -595,7 +595,7 @@ at_VAL_STATE_INIT:
             /* strip the leading double-quote as json_string_* does not
              * consume those, but only the string contents within the
              * double-quotes */
-            const_seg_trim_front(next_chunk, 1);
+            cnst_seg_trim_front(next_chunk, 1);
             jval->state = VAL_STATE_GOT_STRING;
             if (next_chunk->size == 0) {
                 ret = JSON_NEED_MORE;
@@ -624,7 +624,7 @@ at_VAL_STATE_GOT_STRING:
                 goto done;
             }
             /* consume the tail double-quote, and we are done */
-            const_seg_trim_front(next_chunk, 1);
+            cnst_seg_trim_front(next_chunk, 1);
             ret = JSON_READY;
         }
         assert(ret == JSON_READY ||
