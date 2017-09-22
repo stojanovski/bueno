@@ -68,7 +68,7 @@ void char_buffer_append(struct char_buffer_t *cb, const char *buf, size_t sz)
     strarray_append(&cb->arr, "", 1);
 }
 
-void char_buffer_append_const_seg(struct char_buffer_t *cb, const cnst_seg_t *seg)
+void char_buffer_append_ro_seg(struct char_buffer_t *cb, const ro_seg_t *seg)
 {
     char_buffer_append(cb, seg->start, seg->size);
 }
@@ -79,7 +79,7 @@ void char_buffer_set(struct char_buffer_t *cb, const char *buf, size_t sz)
     strarray_append(&cb->arr, "", 1);
 }
 
-void char_buffer_set_const_seg(struct char_buffer_t *cb, const cnst_seg_t *seg)
+void char_buffer_set_ro_seg(struct char_buffer_t *cb, const ro_seg_t *seg)
 {
     char_buffer_set(cb, seg->start, seg->size);
 }

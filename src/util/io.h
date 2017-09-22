@@ -22,13 +22,13 @@
 struct strrdr_t
 {
     int (* open)(void *);
-    int (* read)(void *, cnst_seg_t *);
+    int (* read)(void *, ro_seg_t *);
     void (* get_error)(void *, const char **, int *);
     void *data;
 };
 
 int strrdr_open(struct strrdr_t *reader);
-int strrdr_read(struct strrdr_t *reader, cnst_seg_t *seg);
+int strrdr_read(struct strrdr_t *reader, ro_seg_t *seg);
 void strrdr_get_error(struct strrdr_t *reader, const char **error, int *errnum);
 
 void po_file_reader_init(struct strrdr_t *reader, const char *path);

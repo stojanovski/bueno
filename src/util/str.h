@@ -26,11 +26,11 @@ typedef struct _seg_t
     size_t size;
 } seg_t;
 
-typedef struct _cnst_seg_t
+typedef struct _ro_seg_t
 {
     const char *start;
     size_t size;
-} cnst_seg_t;
+} ro_seg_t;
 
 typedef struct _str_t
 {
@@ -50,9 +50,9 @@ void str_uninit(str_t *str);
 void str_take_ownership(str_t *dst, str_t *src);
 
 
-/* seg_t, cnst_seg_t */
+/* seg_t, ro_seg_t */
 
-static void cnst_seg_trim_front(cnst_seg_t *seg, size_t len)
+static void ro_seg_trim_front(ro_seg_t *seg, size_t len)
 {
     assert(seg->start != (char *)0);
     assert(seg->size >= len);
@@ -64,9 +64,9 @@ static void cnst_seg_trim_front(cnst_seg_t *seg, size_t len)
     assert(seg->start != (char *)0); \
     *start = seg->start; \
     *end = *start + seg->size;
-static void cnst_seg_get_start_and_end(const cnst_seg_t *seg,
-                                       const char **start,
-                                       const char **end)
+static void ro_seg_get_start_and_end(const ro_seg_t *seg,
+                                     const char **start,
+                                     const char **end)
 {
     SEG_GET_START_AND_END(seg, start, end)
 }
@@ -84,13 +84,13 @@ static void seg_from_str(seg_t *seg, const str_t *str)
     seg->size = str->size;
 }
 
-static void cnst_seg_from_seg(cnst_seg_t *dst, const seg_t *src)
+static void ro_seg_from_seg(ro_seg_t *dst, const seg_t *src)
 {
     dst->start = src->start;
     dst->size = src->size;
 }
 
-static void cnst_seg_assign(cnst_seg_t *dst, const cnst_seg_t *src)
+static void ro_seg_assign(ro_seg_t *dst, const ro_seg_t *src)
 {
     dst->start = src->start;
     dst->size = src->size;
@@ -104,7 +104,7 @@ static seg_t *seg_set_static(seg_t *seg, char *null_term_str)
 {
     SEG_SET_STATIC(seg, null_term_str)
 }
-static cnst_seg_t *cnst_seg_set_static(cnst_seg_t *seg, char *null_term_str)
+static ro_seg_t *ro_seg_set_static(ro_seg_t *seg, char *null_term_str)
 {
     SEG_SET_STATIC(seg, null_term_str)
 }
@@ -141,9 +141,9 @@ void char_buffer_init(struct char_buffer_t *cb);
 void char_buffer_clear(struct char_buffer_t *cb);
 void char_buffer_uninit(struct char_buffer_t *cb);
 void char_buffer_append(struct char_buffer_t *cb, const char *buf, size_t sz);
-void char_buffer_append_const_seg(struct char_buffer_t *cb, const cnst_seg_t *seg);
+void char_buffer_append_ro_seg(struct char_buffer_t *cb, const ro_seg_t *seg);
 void char_buffer_set(struct char_buffer_t *cb, const char *buf, size_t sz);
-void char_buffer_set_const_seg(struct char_buffer_t *cb, const cnst_seg_t *seg);
+void char_buffer_set_ro_seg(struct char_buffer_t *cb, const ro_seg_t *seg);
 void char_buffer_pop_front(struct char_buffer_t *cb, size_t sz);
 void char_buffer_get(struct char_buffer_t *cb, seg_t *seg);
 size_t char_buffer_size(struct char_buffer_t *cb);

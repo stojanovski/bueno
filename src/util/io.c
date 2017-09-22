@@ -24,7 +24,7 @@ int strrdr_open(struct strrdr_t *reader)
     return reader->open(reader->data);
 }
 
-int strrdr_read(struct strrdr_t *reader, cnst_seg_t *seg)
+int strrdr_read(struct strrdr_t *reader, ro_seg_t *seg)
 {
     return reader->read(reader->data, seg);
 }
@@ -62,7 +62,7 @@ static int file_reader_open(void *data)
 /* could be overriden for unit test purposes */
 size_t file_reader_read_buflen = FILE_READER_BUFLEN;
 
-static int file_reader_read(void *data, cnst_seg_t *seg)
+static int file_reader_read(void *data, ro_seg_t *seg)
 {
     struct file_reader_t *fr = (struct file_reader_t *)data;
     int ret = (int)fread(fr->buf, 1, file_reader_read_buflen, fr->fp);
@@ -125,7 +125,7 @@ static int line_reader_open(void *data)
     return strrdr_open(ln->src_reader);
 }
 
-static int line_reader_drain_buffer(struct line_reader_t *ln, cnst_seg_t *seg)
+static int line_reader_drain_buffer(struct line_reader_t *ln, ro_seg_t *seg)
 {
     const char *ptr, *end;
     seg_t chunk;
@@ -148,7 +148,7 @@ done:
     return ret;
 }
 
-static int line_reader_read(void *data, cnst_seg_t *seg)
+static int line_reader_read(void *data, ro_seg_t *seg)
 {
     struct line_reader_t *ln = (struct line_reader_t *)data;
     seg_t chunk;
@@ -166,13 +166,13 @@ static int line_reader_read(void *data, cnst_seg_t *seg)
     }
 
     while (1) {
-        cnst_seg_t src;
+        ro_seg_t src;
         ret = strrdr_read(ln->src_reader, &src);
         if (ret == 0) {
             /* EOF: return whatever is inside the buffer */
             ln->at_eof = 1;
             char_buffer_get(&ln->cb, &chunk);
-            cnst_seg_from_seg(seg, &chunk);
+            ro_seg_from_seg(seg, &chunk);
             ret = (int)chunk.size;
             goto done;
         }
@@ -180,7 +180,7 @@ static int line_reader_read(void *data, cnst_seg_t *seg)
             goto done;  /* return ret */
         }
 
-        char_buffer_append_const_seg(&ln->cb, &src);
+        char_buffer_append_ro_seg(&ln->cb, &src);
 
         if (line_reader_drain_buffer(ln, seg)) {
             ret = (int)ln->bytes_returned;

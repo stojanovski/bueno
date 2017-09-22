@@ -47,9 +47,9 @@ static int line_reader_speed(int argc, char **argv)
     {
         size_t iters = 0;
         size_t bytes = 0;
-        cnst_seg_t seg;
+        ro_seg_t seg;
         while ((ret = strrdr_read(&fr, &seg)) > 0) {
-            char_buffer_set_const_seg(&cb, &seg);
+            char_buffer_set_ro_seg(&cb, &seg);
             if (bytes % 10000000 == 0)
                 printf("bytes=%u\n", (unsigned)bytes);
             ++iters;
@@ -213,7 +213,7 @@ static void abort_expression_return(const char *expr,
 static void line_reader_one_test(const char *file_contents, const char *file_path)
 {
     struct strrdr_t fr, lr;
-    cnst_seg_t seg;
+    ro_seg_t seg;
     int ret;
     struct char_buffer_t cb;
     const size_t expected_num_of_lines = util_count_chars(file_contents, '\n');
@@ -239,7 +239,7 @@ static void line_reader_one_test(const char *file_contents, const char *file_pat
 
     while ((ret = strrdr_read(&lr, &seg)) > 0) {
         ASSERT_EXP(!missing_newline);
-        /* char_buffer_set_const_seg(&cb, &seg); */
+        /* char_buffer_set_ro_seg(&cb, &seg); */
         computed_hash = util_djb2_hash(seg.start, seg.size, &computed_hash);
         /* printf("LINE (len=%4d): \"%s\"\n", ret, cb.buf); */
 #if 0
@@ -435,7 +435,7 @@ static void test_one_json_string_value(char * const instr,
 {
 #define BUFSIZE 1024
     char buf[BUFSIZE];
-    cnst_seg_t inref, next_chunk;
+    ro_seg_t inref, next_chunk;
     seg_t outref;
     json_value_t jval;
     const size_t instr_len = strlen(instr);
@@ -459,13 +459,13 @@ static void test_one_json_string_value(char * const instr,
 
     while (1) {
         size_t orig_chunk_size;
-        cnst_seg_assign(&next_chunk, &inref);
+        ro_seg_assign(&next_chunk, &inref);
         if (next_chunk.size > max_bytes_per_parse)
             next_chunk.size = max_bytes_per_parse;
         orig_chunk_size = next_chunk.size;
 
         retval = json_value_parse(&jval, &next_chunk);
-        cnst_seg_trim_front(&inref, orig_chunk_size - next_chunk.size);
+        ro_seg_trim_front(&inref, orig_chunk_size - next_chunk.size);
         if (next_chunk.size > 0)
             break;  /* ran into double-quotes: done */
         else if (inref.size == 0)
@@ -496,24 +496,24 @@ static void test_one_json_string(char * const instr,
                                  const enum json_code_t last_expected_retval)
 {
     json_string_t jstr;
-    cnst_seg_t inref, next_chunk;
+    ro_seg_t inref, next_chunk;
     seg_t outref, result;
     enum json_code_t retval;
 
     json_string_init(&jstr);
 
-    cnst_seg_set_static(&inref, instr);
+    ro_seg_set_static(&inref, instr);
     assert(inref.size > 0);
 
     while (1) {
         size_t orig_chunk_size;
-        cnst_seg_assign(&next_chunk, &inref);
+        ro_seg_assign(&next_chunk, &inref);
         if (next_chunk.size > max_bytes_per_parse)
             next_chunk.size = max_bytes_per_parse;
         orig_chunk_size = next_chunk.size;
 
         retval = json_string_parse(&jstr, &next_chunk);
-        cnst_seg_trim_front(&inref, orig_chunk_size - next_chunk.size);
+        ro_seg_trim_front(&inref, orig_chunk_size - next_chunk.size);
         if (next_chunk.size > 0)
             break;  /* ran into double-quotes: done */
         else if (inref.size == 0)
@@ -664,7 +664,7 @@ static void test_one_json_number(char * const instr,
 {
     json_number_t jnum;
     /* variables that end with _value pertain to testing "json value type" */
-    cnst_seg_t inref, next_chunk, next_chunk_value;
+    ro_seg_t inref, next_chunk, next_chunk_value;
     enum json_code_t retval, retval_value;
     enum json_data_t type;
     union json_number_union_t result, result_value;
@@ -673,13 +673,13 @@ static void test_one_json_number(char * const instr,
     json_number_init(&jnum);
     json_value_init(&jval);
 
-    cnst_seg_set_static(&inref, instr);
+    ro_seg_set_static(&inref, instr);
     assert(inref.size > 0);
 
     while (1) {
         size_t orig_chunk_size;
 
-        cnst_seg_assign(&next_chunk, &inref);
+        ro_seg_assign(&next_chunk, &inref);
         if (next_chunk.size > max_bytes_per_parse)
             next_chunk.size = max_bytes_per_parse;
         orig_chunk_size = next_chunk.size;
@@ -690,7 +690,7 @@ static void test_one_json_number(char * const instr,
         retval = json_number_parse(&jnum, &next_chunk);
         retval_value = json_value_parse(&jval, &next_chunk_value);
 
-        cnst_seg_trim_front(&inref, orig_chunk_size - next_chunk.size);
+        ro_seg_trim_front(&inref, orig_chunk_size - next_chunk.size);
         if (next_chunk.size > 0)
             break; /* ran into double-quotes: done */
         else if (inref.size == 0)
