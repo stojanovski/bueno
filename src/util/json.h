@@ -64,7 +64,15 @@ enum json_code_t json_number_result(json_number_t *jnum,
                                     union json_number_union_t *result);
 void json_number_as_str(json_number_t *jnum, seg_t *seg);
 
-enum json_value_t { JSON_NO_VALUE, JSON_STRING, JSON_NUMBER };
+enum json_value_t
+{
+    JSON_NO_VALUE,
+    JSON_STRING,
+    JSON_NUMBER,
+    JSON_TRUE,
+    JSON_FALSE,
+    JSON_NULL
+};
 
 union json_value_union_t
 {
@@ -77,6 +85,8 @@ typedef struct _json_value_t
     enum json_value_t type;
     union json_value_union_t value;
     unsigned state;
+    const char *literal;
+    const char *literal_ptr;
 } json_value_t;
 
 void json_value_init(json_value_t *jval);

@@ -893,14 +893,87 @@ static void test_one_json_value(char *instr,
 {
 }
 
+/* tests "true", "false" and "null" value literals */
+static void test_one_json_literal_value(char * const instr,
+                                        const size_t max_bytes_per_parse,
+                                        const size_t unconsumed_chars,
+                                        const enum json_value_t expected_type,
+                                        const enum json_code_t last_expected_retval)
+{
+    ro_seg_t inref, next_chunk;
+    json_value_t jval;
+    enum json_code_t retval;
+    enum json_value_t type;
+
+    (void)ro_seg_set_static(&inref, instr);
+
+    json_value_init(&jval);
+
+    while (1) {
+        size_t orig_chunk_size;
+        ro_seg_assign(&next_chunk, &inref);
+        if (next_chunk.size > max_bytes_per_parse)
+            next_chunk.size = max_bytes_per_parse;
+        orig_chunk_size = next_chunk.size;
+
+        retval = json_value_parse(&jval, &next_chunk);
+        ro_seg_trim_front(&inref, orig_chunk_size - next_chunk.size);
+        if (retval == JSON_READY || retval == JSON_INPUT_ERROR)
+            break; /* finished parsing the literal or error */
+        else if (inref.size == 0)
+            break; /* exhausted the input */
+    }
+
+    ASSERT_NONZERO(retval == last_expected_retval);
+
+    if (retval == JSON_READY) {
+        json_value_result(&jval, &type, NULL);
+        ASSERT_NONZERO(type == expected_type);
+    }
+
+    json_value_uninit(&jval);
+
+    ASSERT_INT((int)inref.size, (int)unconsumed_chars);
+}
+
 static int test_json_value(int argc, char **argv)
 {
-    test_one_json_string_value("igor", "igor", 100, 0, JSON_READY);
-    test_one_json_string_value("\\", "", 100, 0, JSON_NEED_MORE);
+#define BPP bytes_per_parse[i]
+    static const size_t bytes_per_parse[] = { 100, 1, 2, 3, 4, 5 };
+    unsigned i;
+
+    /* test general json value error */
+    test_one_json_literal_value("X", 100, 1, JSON_NO_VALUE, JSON_INPUT_ERROR);
+
     test_one_json_string_value("", "", 1, 0, JSON_READY);
     test_one_json_string_value("", "", 1, 0, JSON_READY);
 
+    for (i = 0; i < ARRAY_SIZE(bytes_per_parse); ++i)
+    {
+        test_one_json_string_value("igor", "igor", BPP, 0, JSON_READY);
+        test_one_json_string_value("\\", "", BPP, 0, JSON_NEED_MORE);
+
+        /* test literals */
+        test_one_json_literal_value("t", BPP, 0, JSON_NO_VALUE, JSON_NEED_MORE);
+        test_one_json_literal_value("tr", BPP, 0, JSON_NO_VALUE, JSON_NEED_MORE);
+        test_one_json_literal_value("tru", BPP, 0, JSON_NO_VALUE, JSON_NEED_MORE);
+        test_one_json_literal_value("true", BPP, 0, JSON_TRUE, JSON_READY);
+        test_one_json_literal_value("true ", BPP, 1, JSON_TRUE, JSON_READY);
+
+        test_one_json_literal_value("f", BPP, 0, JSON_NO_VALUE, JSON_NEED_MORE);
+        test_one_json_literal_value("fals", BPP, 0, JSON_NO_VALUE, JSON_NEED_MORE);
+        test_one_json_literal_value("false", BPP, 0, JSON_FALSE, JSON_READY);
+
+        test_one_json_literal_value("n", BPP, 0, JSON_NO_VALUE, JSON_NEED_MORE);
+        test_one_json_literal_value("nul", BPP, 0, JSON_NO_VALUE, JSON_NEED_MORE);
+        test_one_json_literal_value("nullXXX", BPP, 3, JSON_NULL, JSON_READY);
+
+        /* test error */
+        test_one_json_literal_value("tX", BPP, 1, JSON_NO_VALUE, JSON_INPUT_ERROR);
+    }
+
     return 0;
+#undef BPP
 }
 
 /****************************************************************************/

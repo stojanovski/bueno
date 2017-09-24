@@ -563,15 +563,17 @@ void json_value_uninit(json_value_t *jval)
         json_string_uninit(&jval->value.str);
     else if (jval->type == JSON_NUMBER)
         json_number_uninit(&jval->value.num);
-    else {
-        assert(jval->type == JSON_NO_VALUE);
-    }
-    jval->type = JSON_NO_VALUE;
 }
 
-#define VAL_STATE_INIT 0
-#define VAL_STATE_GOT_STRING 1
-#define VAL_STATE_GOT_NUMBER 2
+#define VAL_STATE_INIT        0
+#define VAL_STATE_GOT_STRING  1
+#define VAL_STATE_GOT_NUMBER  2
+#define VAL_STATE_GOT_LITERAL 3
+
+/* since the first char of the literal is consumed, we only need the rest */
+static const char *literal_true  = "rue";
+static const char *literal_false = "alse";
+static const char *literal_null  = "ull";
 
 enum json_code_t json_value_parse(json_value_t *jval, ro_seg_t *next_chunk)
 {
@@ -609,8 +611,35 @@ at_VAL_STATE_INIT:
             jval->state = VAL_STATE_GOT_NUMBER;
             goto at_VAL_STATE_GOT_NUMBER;
         }
-        ret = JSON_INPUT_ERROR;
-        goto done;
+        switch (c) {
+        case 't':
+            jval->type = JSON_TRUE;
+            jval->literal = jval->literal_ptr = literal_true;
+            break;
+        case 'f':
+            jval->type = JSON_FALSE;
+            jval->literal = jval->literal_ptr = literal_false;
+            break;
+        case 'n':
+            jval->type = JSON_NULL;
+            jval->literal = jval->literal_ptr = literal_null;
+            break;
+        default:
+            /* unrecognized json value type */
+            ret = JSON_INPUT_ERROR;
+            goto done;
+        }
+        /* one of the literal types */
+        assert(jval->type == JSON_TRUE ||
+               jval->type == JSON_FALSE ||
+               jval->type == JSON_NULL);
+        ro_seg_trim_front(next_chunk, 1);
+        jval->state = VAL_STATE_GOT_LITERAL;
+        if (next_chunk->size == 0) {
+            ret = JSON_NEED_MORE;
+            goto done;
+        }
+        goto at_VAL_STATE_GOT_LITERAL;
     }
 
 at_VAL_STATE_GOT_STRING:
@@ -640,6 +669,31 @@ at_VAL_STATE_GOT_NUMBER:
                ret == JSON_NEED_MORE ||
                ret == JSON_INPUT_ERROR);
         goto done;
+
+at_VAL_STATE_GOT_LITERAL:
+    case VAL_STATE_GOT_LITERAL:
+    {
+        assert(next_chunk->size > 0);
+        assert(*jval->literal_ptr != '\0');
+        while (next_chunk->size > 0) {
+            if (*next_chunk->start != *jval->literal_ptr) {
+                /* invalid literal char received */
+                ret = JSON_INPUT_ERROR;
+                goto done;
+            }
+            ro_seg_trim_front(next_chunk, 1);
+            if (*(++jval->literal_ptr) == '\0') {
+                /* done parsing the literal */
+                ret = JSON_READY;
+                goto done;
+            }
+        }
+        ret = JSON_NEED_MORE;
+        goto done;
+    }
+
+    default:
+        break;
     }
 
 done:
@@ -653,5 +707,6 @@ void json_value_result(json_value_t *jval,
     /* must be called only after successful parse */
     assert(jval->type != JSON_NO_VALUE);
     *type = jval->type;
-    *result = &jval->value;
+    if (result != NULL)
+        *result = &jval->value;
 }
